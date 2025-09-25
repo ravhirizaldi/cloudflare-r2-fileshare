@@ -1,0 +1,41 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "your-worker-name",
+	"main": "src/index.js",
+	"compatibility_date": "2025-09-23",
+	"observability": {
+		"enabled": true
+	},
+	"vars": {
+		"CORS_ORIGIN": "http://localhost:5173",
+		"MAX_FILE_SIZE": "104857600",
+		"DEFAULT_EXPIRY_HOURS": "24",
+		"MAX_DOWNLOADS_DEFAULT": "10"
+	},
+	"r2_buckets": [
+		{
+			"binding": "MY_BUCKET",
+			"bucket_name": "your-bucket-name",
+			"preview_bucket_name": "your-bucket-name"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "TOKENS",
+			"id": "your-kv-namespace-id",
+			"preview_id": "your-kv-namespace-id"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "your-database-name",
+			"database_id": "your-database-id"
+		}
+	],
+	"triggers": {
+		"crons": [
+			"0 * * * *"
+		]
+	}
+}

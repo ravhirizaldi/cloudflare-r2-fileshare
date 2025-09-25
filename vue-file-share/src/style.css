@@ -1,0 +1,46 @@
+@import 'tailwindcss';
+
+/* Custom toast styles */
+.Vue-Toastification__toast {
+  @apply backdrop-blur-sm border border-white/20 shadow-2xl;
+}
+
+.Vue-Toastification__toast--success {
+  @apply bg-green-500/90 text-white;
+}
+
+.Vue-Toastification__toast--error {
+  @apply bg-red-500/90 text-white;
+}
+
+.Vue-Toastification__toast--warning {
+  @apply bg-yellow-500/90 text-white;
+}
+
+.Vue-Toastification__toast--info {
+  @apply bg-blue-500/90 text-white;
+}
+
+.Vue-Toastification__close-button {
+  @apply text-white/80 hover:text-white transition-colors;
+}
+
+.Vue-Toastification__progress-bar {
+  @apply bg-white/30;
+}
+
+.toast-success-custom {
+  @apply bg-gradient-to-r from-green-500 to-green-600 border-green-400/30;
+}
+
+.toast-error-custom {
+  @apply bg-gradient-to-r from-red-500 to-red-600 border-red-400/30;
+}
+
+.toast-warning-custom {
+  @apply bg-gradient-to-r from-yellow-500 to-yellow-600 border-yellow-400/30;
+}
+
+.toast-info-custom {
+  @apply bg-gradient-to-r from-blue-500 to-blue-600 border-blue-400/30;
+}
