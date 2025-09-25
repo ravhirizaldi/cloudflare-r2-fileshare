@@ -1,6 +1,6 @@
 # R2 File Share - Advanced Temporary File Sharing Platform
 
-A cutting-edge, secure file sharing platform with **Anti-IDM Technology** and **Streaming Downloads**. Built with Vue 3 frontend and Cloudflare Workers backend featuring advanced download manager bypass, real-time progress tracking, and enterprise-grade security.
+A cutting-edge, secure file sharing platform with **Anti-Download Manager Technology** and **Streaming Downloads**. Built with Vue 3 frontend and Cloudflare Workers backend featuring advanced download manager bypass, real-time progress tracking, and enterprise-grade security.
 
 ## 🚀 Project Overview
 
@@ -8,7 +8,7 @@ R2 File Share is a next-generation full-stack application that revolutionizes te
 
 ### 🎯 Key Innovations
 
-- 🛡️ **Multi-Layer Anti-IDM Protection** - Advanced bypass system for Internet Download Manager and similar tools
+- 🛡️ **Multi-Layer Download Manager Protection** - Advanced bypass system for IDM/FDM and similar tools
 - 🌊 **Streaming Downloads** - Real-time progress tracking with resume capability for files of any size
 - 🎭 **Smart File Masking** - Automatic protection for executable files with transparent restoration
 - ⚡ **High Performance** - Edge-distributed infrastructure with global CDN
@@ -35,7 +35,6 @@ Our **5-layer defense system** completely bypasses Internet Download Manager and
 4. **🎪 Client-Side Evasion** - Multiple fallback strategies with data URL conversion
 5. **🧪 Detection Avoidance** - Random delays and steganographic downloads
 
-**Supported Protected Files**: `.exe`, `.msi`, `.dmg`, `.pkg`, `.deb`, `.rpm`, `.app`
 
 ### 🌊 Streaming Downloads
 Advanced streaming technology for optimal performance:
@@ -122,24 +121,36 @@ r2-fileshare/
 ### Authentication Endpoints
 | Method | Endpoint | Description | Features |
 |--------|----------|-------------|----------|
-| POST | `/auth/register` | Create new user account | Username validation, password hashing |
-| POST | `/auth/login` | Authenticate user | JWT token generation, session management |
-| GET | `/me` | Get user profile | Token validation, user info |
+| POST | `/auth/register` | Create new user account | Username validation, password hashing, audit logging |
+| POST | `/auth/login` | Authenticate user | JWT token generation, session management, login tracking |
+| GET | `/me` | Get user profile | Token validation, user info, role-based access |
 
 ### File Management Endpoints
 | Method | Endpoint | Description | Special Features |
 |--------|----------|-------------|------------------|
-| POST | `/upload` | Upload files | Auto-masking executables, progress tracking |
-| GET | `/myfiles` | List user files | Pagination, filtering, status indicators |
-| GET | `/r/{token}` | Download files | **Anti-IDM protection**, streaming support |
-| GET | `/status/{token}` | File information | Expiry status, download count, metadata |
+| POST | `/upload` | Upload files | Auto-masking executables, progress tracking, audit logging |
+| GET | `/myfiles` | List user files | Pagination, filtering, status indicators, sorting |
+| GET | `/r/{token}` | Download files | **Anti-IDM protection**, streaming support, download history |
+| GET | `/status/{token}` | File information (auth required) | Expiry status, download count, detailed metadata |
 | GET | `/public-status/{token}` | Public file info | Safe metadata without authentication |
+| DELETE | `/files/bulk-delete` | Delete multiple files | Bulk operations, soft delete, audit trail |
+
+### Administrative Endpoints
+| Method | Endpoint | Description | Features |
+|--------|----------|-------------|----------|
+| DELETE | `/delete/{token}` | Delete single file | Soft delete, owner/admin authorization, audit logging |
+| GET | `/stats/{token}` | File statistics | Download analytics, usage metrics, historical data |
+| GET | `/user/stats` | User statistics | Personal file analytics, storage usage, activity summary |
+| GET | `/admin/audit` | Audit trail | System-wide activity logs, security monitoring |
+| POST | `/admin/restore/{token}` | Restore deleted file | Admin-only file recovery, audit logging |
 
 ### Advanced Parameters
 - `unlimited=true` - Remove download limits for important files
-- `expiry=1d|1h|30m|1month` - Custom expiration periods
-- `originalName` - Handle masked executable files
-- `page=N&limit=N` - Pagination controls
+- `expiry=1d|1h|30m|1week|1month` - Custom expiration periods (supports seconds, minutes, hours, days, weeks, months)
+- `originalName` - Handle masked executable files and restore original names
+- `page=N&limit=N` - Pagination controls for file listings
+- `hard=true` - Permanent deletion (admin only)
+- `reason=string` - Deletion reason for audit trail
 
 
 ## 🌊 Streaming Technology
