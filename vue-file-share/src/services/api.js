@@ -108,6 +108,13 @@ export const filesAPI = {
     })
   },
   getMyFiles: (page = 1, limit = 10) => api.get('/myfiles', { params: { page, limit } }),
+  bulkDelete: (
+    fileTokens,
+    permanent = true, // Default to permanent deletion
+  ) =>
+    api.delete('/files/bulk-delete', {
+      data: { fileTokens, permanent },
+    }),
   download: (token) => api.get(`/r/${token}`, { responseType: 'blob' }),
 
   // Alternative download method using a hidden iframe (for very stubborn cases)
@@ -126,7 +133,7 @@ export const filesAPI = {
     })
   },
 
-  downloadWithProgress: (token, onProgress) => {
+  downloadWithProgress: (token, onProgress, abortController = null) => {
     return new Promise((resolve, reject) => {
       const apiToken = localStorage.getItem('token')
 
@@ -134,6 +141,7 @@ export const filesAPI = {
       // First, let's check what type of file this is by getting file info
       fetch(`${api.defaults.baseURL}/status/${token}`, {
         headers: apiToken ? { Authorization: `Bearer ${apiToken}` } : {},
+        signal: abortController?.signal,
       })
         .then((response) => response.json())
         .then((fileInfo) => {
@@ -141,21 +149,34 @@ export const filesAPI = {
 
           if (isExecutable) {
             // Use fetch with specific anti-IDM techniques for executables
-            filesAPI._downloadExecutableViaFetch(token, onProgress).then(resolve).catch(reject)
+            filesAPI
+              ._downloadExecutableViaFetch(token, onProgress, abortController)
+              .then(resolve)
+              .catch(reject)
           } else {
             // Use normal XMLHttpRequest for other files
-            filesAPI._downloadNormalFile(token, onProgress).then(resolve).catch(reject)
+            filesAPI
+              ._downloadNormalFile(token, onProgress, abortController)
+              .then(resolve)
+              .catch(reject)
           }
         })
-        .catch(() => {
-          // Fallback to normal download if status check fails
-          filesAPI._downloadNormalFile(token, onProgress).then(resolve).catch(reject)
+        .catch((error) => {
+          if (error.name === 'AbortError') {
+            reject(new Error('Download cancelled'))
+          } else {
+            // Fallback to normal download if status check fails
+            filesAPI
+              ._downloadNormalFile(token, onProgress, abortController)
+              .then(resolve)
+              .catch(reject)
+          }
         })
     })
   },
 
   // Special download method for executable files to avoid IDM
-  _downloadExecutableViaFetch: (token, onProgress) => {
+  _downloadExecutableViaFetch: (token, onProgress, abortController = null) => {
     return new Promise((resolve, reject) => {
       const apiToken = localStorage.getItem('token')
 
@@ -181,6 +202,7 @@ export const filesAPI = {
         credentials: 'same-origin',
         // Use no-cors mode to avoid preflight requests that IDM might detect
         mode: 'cors',
+        signal: abortController?.signal,
       })
         .then((response) => {
           if (!response.ok) {
@@ -219,32 +241,54 @@ export const filesAPI = {
           const chunks = []
 
           function pump() {
-            return reader.read().then(({ done, value }) => {
-              if (done) {
-                const blob = new Blob(chunks, { type: 'application/octet-stream' })
-                filesAPI._triggerAntiIDMDownload(blob, fileName)
-                resolve({ fileName, total, loaded })
-                return
-              }
+            return reader
+              .read()
+              .then(({ done, value }) => {
+                // Check if aborted
+                if (abortController?.signal.aborted) {
+                  reader.cancel()
+                  throw new Error('Download cancelled')
+                }
 
-              chunks.push(value)
-              loaded += value.length
+                if (done) {
+                  const blob = new Blob(chunks, { type: 'application/octet-stream' })
+                  filesAPI._triggerAntiIDMDownload(blob, fileName)
+                  resolve({ fileName, total, loaded })
+                  return
+                }
 
-              if (onProgress) {
-                onProgress({
-                  loaded,
-                  total,
-                  progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
-                })
-              }
+                chunks.push(value)
+                loaded += value.length
 
-              return pump()
-            })
+                if (onProgress) {
+                  onProgress({
+                    loaded,
+                    total,
+                    progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
+                  })
+                }
+
+                return pump()
+              })
+              .catch((error) => {
+                if (error.message === 'Download cancelled' || abortController?.signal.aborted) {
+                  reader.cancel()
+                  reject(new Error('Download cancelled'))
+                } else {
+                  reject(error)
+                }
+              })
           }
 
           return pump()
         })
-        .catch(reject)
+        .catch((error) => {
+          if (error.name === 'AbortError') {
+            reject(new Error('Download cancelled'))
+          } else {
+            reject(error)
+          }
+        })
     })
   },
 
@@ -340,7 +384,7 @@ export const filesAPI = {
   },
 
   // Normal download method for non-executable files
-  _downloadNormalFile: (token, onProgress) => {
+  _downloadNormalFile: (token, onProgress, abortController = null) => {
     return new Promise((resolve, reject) => {
       const apiToken = localStorage.getItem('token')
       const fullUrl = `${api.defaults.baseURL}/r/${token}`
@@ -349,6 +393,13 @@ export const filesAPI = {
       const xhr = new XMLHttpRequest()
       xhr.open('GET', fullUrl, true)
       xhr.responseType = 'blob'
+
+      // Handle abort controller
+      if (abortController) {
+        abortController.signal.addEventListener('abort', () => {
+          xhr.abort()
+        })
+      }
 
       // Set headers
       if (apiToken) {
@@ -369,6 +420,14 @@ export const filesAPI = {
             progress: Math.round((loaded / total) * 100),
           })
         }
+      }
+
+      xhr.onabort = () => {
+        reject(new Error('Download cancelled'))
+      }
+
+      xhr.onerror = () => {
+        reject(new Error('Download failed'))
       }
 
       xhr.onload = () => {

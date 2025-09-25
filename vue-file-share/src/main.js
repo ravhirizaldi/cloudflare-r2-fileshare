@@ -12,7 +12,7 @@ const pinia = createPinia()
 // Toast configuration
 const toastOptions = {
   position: POSITION.TOP_RIGHT,
-  timeout: 5000,
+  timeout: 2000,
   closeOnClick: true,
   pauseOnFocusLoss: true,
   pauseOnHover: true,

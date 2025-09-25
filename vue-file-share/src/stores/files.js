@@ -133,10 +133,10 @@ export const useFilesStore = defineStore('files', () => {
     }
   }
 
-  const downloadFileWithProgress = async (token, onProgress) => {
+  const downloadFileWithProgress = async (token, onProgress, abortController = null) => {
     try {
       error.value = null
-      return await filesAPI.downloadWithProgress(token, onProgress)
+      return await filesAPI.downloadWithProgress(token, onProgress, abortController)
     } catch (err) {
       error.value = err.message || 'Download failed'
       throw err
@@ -169,6 +169,22 @@ export const useFilesStore = defineStore('files', () => {
     return link
   }
 
+  const bulkDeleteFiles = async (fileTokens, permanent = true) => {
+    // Default to permanent deletion
+    try {
+      error.value = null
+      const response = await filesAPI.bulkDelete(fileTokens, permanent)
+
+      // Refresh the files list after deletion
+      await fetchFiles()
+
+      return response.data
+    } catch (err) {
+      error.value = err.response?.data?.message || 'Bulk deletion failed'
+      throw err
+    }
+  }
+
   return {
     files,
     isLoading,
@@ -184,5 +200,6 @@ export const useFilesStore = defineStore('files', () => {
     getFileStatus,
     getPublicFileStatus,
     copyDownloadLink,
+    bulkDeleteFiles,
   }
 })

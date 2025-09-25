@@ -1,188 +1,45 @@
 <template>
-  <div class="w-full">
+  <div class="w-full space-y-8">
+    <!-- Dropzone -->
     <div
       :class="[
-        'border-2 border-dashed rounded-lg p-8 text-center transition-colors',
-        isDragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300',
+        'relative flex flex-col items-center justify-center p-12 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-300',
+        isDragOver
+          ? 'border-blue-500 bg-blue-50/70 scale-[1.01] shadow-lg'
+          : 'border-gray-300 bg-white hover:bg-gray-50'
       ]"
+      @click="openFileDialog"
       @drop="handleDrop"
       @dragover.prevent
-      @dragenter.prevent
+      @dragenter.prevent="isDragOver = true"
+      @dragleave.prevent="isDragOver = false"
     >
-      <div class="mb-4">
-        <svg
-          class="mx-auto h-12 w-12 text-gray-400"
-          stroke="currentColor"
-          fill="none"
-          viewBox="0 0 48 48"
-        >
-          <path
-            d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </div>
-      <div class="mb-4">
-        <p class="text-lg font-medium text-gray-900">Drop a file here or click to select</p>
-        <p class="text-sm text-gray-500">Single file upload only</p>
-      </div>
+      <ArrowUpTrayIcon class="h-12 w-12 text-blue-500 animate-bounce mb-4" />
+      <p class="text-lg font-semibold text-gray-800">Drop a file here</p>
+      <p class="text-sm text-gray-500">or click to browse</p>
       <input ref="fileInput" type="file" class="hidden" @change="handleFileSelect" />
-      <button
-        type="button"
-        class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-        @click="openFileDialog"
+    </div>
+
+    <!-- File Selected -->
+    <div v-if="selectedFile" class="space-y-6">
+      <!-- File Info -->
+      <div
+        class="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-blue-50 to-purple-50 shadow-sm"
       >
-        <FolderOpenIcon class="h-4 w-4 mr-2" />
-        Select File
-      </button>
-    </div>
-
-    <!-- Upload Options -->
-    <div v-if="selectedFile" class="mt-6 bg-gray-50 p-4 rounded-lg">
-      <h3 class="text-lg font-medium text-gray-900 mb-4">Upload Options</h3>
-
-      <!-- Expiry Options -->
-      <div class="mb-4">
-        <label class="block text-sm font-medium text-gray-700 mb-2"> File Expiry </label>
-        <div class="space-y-3">
-          <!-- Quick Options -->
-          <div class="flex flex-wrap gap-2">
-            <label class="inline-flex items-center">
-              <input
-                v-model="uploadOptions.expiryType"
-                type="radio"
-                value="quick"
-                class="form-radio text-blue-600"
-                @change="uploadOptions.quickExpiry = '1h'"
-              />
-              <span class="ml-2 text-sm">Quick Options</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input
-                v-model="uploadOptions.expiryType"
-                type="radio"
-                value="custom"
-                class="form-radio text-blue-600"
-              />
-              <span class="ml-2 text-sm">Custom Date</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input
-                v-model="uploadOptions.expiryType"
-                type="radio"
-                value="never"
-                class="form-radio text-blue-600"
-              />
-              <span class="ml-2 text-sm">Never Expires</span>
-            </label>
-          </div>
-
-          <!-- Quick Options -->
-          <div v-if="uploadOptions.expiryType === 'quick'" class="flex flex-wrap gap-2 pl-6">
-            <label class="inline-flex items-center">
-              <input
-                v-model="uploadOptions.quickExpiry"
-                type="radio"
-                value="1m"
-                class="form-radio text-blue-600"
-              />
-              <span class="ml-2 text-sm">1 minute</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input
-                v-model="uploadOptions.quickExpiry"
-                type="radio"
-                value="1h"
-                class="form-radio text-blue-600"
-              />
-              <span class="ml-2 text-sm">1 hour</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input
-                v-model="uploadOptions.quickExpiry"
-                type="radio"
-                value="1d"
-                class="form-radio text-blue-600"
-              />
-              <span class="ml-2 text-sm">1 day</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input
-                v-model="uploadOptions.quickExpiry"
-                type="radio"
-                value="7d"
-                class="form-radio text-blue-600"
-              />
-              <span class="ml-2 text-sm">1 week</span>
-            </label>
-            <label class="inline-flex items-center">
-              <input
-                v-model="uploadOptions.quickExpiry"
-                type="radio"
-                value="30d"
-                class="form-radio text-blue-600"
-              />
-              <span class="ml-2 text-sm">1 month</span>
-            </label>
-          </div>
-
-          <!-- Custom Date Picker -->
-          <div v-if="uploadOptions.expiryType === 'custom'" class="pl-6">
-            <VueDatePicker
-              v-model="uploadOptions.customExpiry"
-              :min-date="new Date()"
-              :enable-time-picker="true"
-              :format="'yyyy-MM-dd HH:mm'"
-              placeholder="Select expiry date and time"
-              class="w-full"
-            />
-            <p class="text-xs text-gray-500 mt-1">File will expire on: {{ formatCustomExpiry }}</p>
-          </div>
-
-          <!-- Never Expires Info -->
-          <div v-if="uploadOptions.expiryType === 'never'" class="pl-6">
-            <p class="text-sm text-green-600">
-              ✨ This file will never expire and can be downloaded indefinitely
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Unlimited Downloads -->
-      <div class="mb-4">
-        <label class="inline-flex items-center">
-          <input
-            v-model="uploadOptions.unlimited"
-            type="checkbox"
-            class="form-checkbox text-blue-600"
-          />
-          <span class="ml-2 text-sm font-medium text-gray-700"> Unlimited downloads </span>
-        </label>
-      </div>
-    </div>
-
-    <!-- Selected File -->
-    <div v-if="selectedFile" class="mt-6">
-      <h3 class="text-lg font-medium text-gray-900 mb-4">Selected File</h3>
-      <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-        <div class="flex items-center space-x-3 min-w-0 flex-1">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
           <component
             :is="getFileIcon(selectedFile.type, selectedFile.name)"
-            :class="['h-8 w-8 flex-shrink-0', getIconColor(selectedFile.type)]"
+            :class="['h-10 w-10 flex-shrink-0', getIconColor(selectedFile.type)]"
           />
           <div class="min-w-0 flex-1">
             <p class="font-medium text-gray-900 truncate" :title="selectedFile.name">
               {{ selectedFile.name }}
             </p>
-            <p class="text-sm text-gray-500">
-              {{ formatFileSize(selectedFile.size) }}
-            </p>
+            <p class="text-xs text-gray-500">{{ formatFileSize(selectedFile.size) }}</p>
           </div>
         </div>
         <button
-          class="text-red-500 hover:text-red-700 transition-colors flex items-center space-x-1 flex-shrink-0 ml-3"
+          class="text-red-500 hover:text-red-700 transition flex items-center gap-1 flex-shrink-0 ml-3"
           @click="clearFile"
         >
           <XMarkIcon class="h-4 w-4" />
@@ -190,47 +47,86 @@
         </button>
       </div>
 
-      <div class="mt-6 flex justify-end space-x-3">
+      <!-- Expiry Options -->
+      <div class="space-y-4">
+        <h3 class="text-sm font-medium text-gray-700">Expiry</h3>
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-for="opt in quickOptions"
+            :key="opt.value"
+            type="button"
+            :class="[
+              'px-3 py-1.5 text-sm rounded-full border transition',
+              uploadOptions.expiryType === 'quick' && uploadOptions.quickExpiry === opt.value
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+            ]"
+            @click="setExpiry('quick', opt.value)"
+          >
+            {{ opt.label }}
+          </button>
+          <button
+            type="button"
+            :class="[
+              'px-3 py-1.5 text-sm rounded-full border transition',
+              uploadOptions.expiryType === 'never'
+                ? 'bg-green-600 text-white border-green-600'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+            ]"
+            @click="uploadOptions.expiryType = 'never'"
+          >
+            Never
+          </button>
+        </div>
+
+        <div v-if="uploadOptions.expiryType === 'custom'" class="pt-2">
+          <VueDatePicker
+            v-model="uploadOptions.customExpiry"
+            :min-date="new Date()"
+            :enable-time-picker="true"
+            :format="'yyyy-MM-dd HH:mm'"
+            placeholder="Pick expiry date & time"
+            class="w-full"
+          />
+          <p class="text-xs text-gray-500 mt-1">Expires on: {{ formatCustomExpiry }}</p>
+        </div>
+      </div>
+
+      <!-- Unlimited Downloads -->
+      <label class="inline-flex items-center gap-2 text-sm text-gray-700">
+        <input v-model="uploadOptions.unlimited" type="checkbox" class="rounded text-blue-600" />
+        Unlimited downloads
+      </label>
+
+      <!-- Actions -->
+      <div class="flex justify-end gap-3">
         <button
-          class="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center space-x-1"
+          class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-1"
           @click="clearFile"
         >
-          <XCircleIcon class="h-4 w-4" />
-          <span>Clear</span>
+          <XCircleIcon class="h-4 w-4" /> Clear
         </button>
         <button
           :disabled="isUploading"
-          class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center space-x-1"
+          class="px-4 py-2 rounded-lg text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 flex items-center gap-1 transition"
           @click="uploadFile"
         >
           <ArrowUpTrayIcon class="h-4 w-4" />
-          <span>{{ isUploading ? 'Uploading...' : 'Upload File' }}</span>
+          {{ isUploading ? 'Uploading...' : 'Upload' }}
         </button>
       </div>
 
-      <!-- Upload Progress Bar -->
+      <!-- Progress -->
       <div v-if="isUploading" class="mt-4">
-        <div class="flex items-center justify-between text-sm font-medium text-gray-700 mb-2">
-          <span class="flex items-center space-x-2 min-w-0 flex-1">
-            <ArrowUpTrayIcon class="h-4 w-4 animate-pulse text-blue-600 flex-shrink-0" />
-            <span class="truncate" :title="selectedFile?.name">
-              Uploading {{ selectedFile?.name }}...
-            </span>
-          </span>
-          <span class="text-blue-600 flex-shrink-0 ml-2">{{ uploadProgress }}%</span>
+        <div class="flex items-center justify-between text-sm font-medium mb-2 text-gray-700">
+          <span class="truncate">Uploading {{ selectedFile?.name }}...</span>
+          <span class="text-blue-600">{{ uploadProgress }}%</span>
         </div>
-        <div class="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+        <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
           <div
-            class="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500 ease-out shadow-sm"
+            class="h-full bg-gradient-to-r from-blue-500 to-purple-600 transition-all duration-500 ease-out"
             :style="{ width: uploadProgress + '%' }"
-          >
-            <div
-              class="h-full w-full bg-gradient-to-r from-white/20 to-transparent rounded-full"
-            ></div>
-          </div>
-        </div>
-        <div class="text-xs text-gray-500 mt-1 text-center">
-          {{ uploadProgress < 100 ? 'Please wait...' : 'Processing...' }}
+          ></div>
         </div>
       </div>
     </div>
@@ -242,9 +138,11 @@ import { ref, computed } from 'vue'
 import { useFilesStore } from '../stores/files'
 import { useToast } from '../composables/useToast'
 import { useFileIcon } from '../composables/useFileIcon'
-import { FolderOpenIcon, XMarkIcon, XCircleIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline'
+import { ArrowUpTrayIcon, XMarkIcon, XCircleIcon } from '@heroicons/vue/24/outline'
 import VueDatePicker from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
+
+const emit = defineEmits(['file-uploaded'])
 
 const filesStore = useFilesStore()
 const { success, error } = useToast()
@@ -254,54 +152,46 @@ const fileInput = ref(null)
 const selectedFile = ref(null)
 const isDragOver = ref(false)
 
-// Access reactive properties directly from store
 const isUploading = computed(() => filesStore.isUploading)
 const uploadProgress = computed(() => filesStore.uploadProgress)
 
-// Upload options
+const quickOptions = [
+  { value: '1m', label: '1 min' },
+  { value: '1h', label: '1 hour' },
+  { value: '1d', label: '1 day' },
+  { value: '7d', label: '1 week' },
+  { value: '30d', label: '1 month' }
+]
+
 const uploadOptions = ref({
-  expiryType: 'quick', // 'quick', 'custom', 'never'
-  quickExpiry: '1h', // Duration string for quick options
-  customExpiry: null, // Date object for custom expiry
-  unlimited: false,
+  expiryType: 'quick',
+  quickExpiry: '1h',
+  customExpiry: null,
+  unlimited: false
 })
 
-// Computed property to format custom expiry date
-const formatCustomExpiry = computed(() => {
-  if (!uploadOptions.value.customExpiry) return 'No date selected'
-  return new Date(uploadOptions.value.customExpiry).toLocaleString()
-})
+const formatCustomExpiry = computed(() =>
+  uploadOptions.value.customExpiry
+    ? new Date(uploadOptions.value.customExpiry).toLocaleString()
+    : 'No date selected'
+)
 
 const handleDrop = (e) => {
   e.preventDefault()
   isDragOver.value = false
   const files = Array.from(e.dataTransfer.files)
-  if (files.length > 0) {
-    selectFile(files[0]) // Only take the first file
-  }
+  if (files.length > 0) selectFile(files[0])
 }
-
 const handleFileSelect = (e) => {
   const files = Array.from(e.target.files)
-  if (files.length > 0) {
-    selectFile(files[0]) // Only take the first file
-  }
+  if (files.length > 0) selectFile(files[0])
 }
-
-const selectFile = (file) => {
-  selectedFile.value = file
-}
-
+const selectFile = (file) => (selectedFile.value = file)
 const clearFile = () => {
   selectedFile.value = null
-  if (fileInput.value) {
-    fileInput.value.value = ''
-  }
+  if (fileInput.value) fileInput.value.value = ''
 }
-
-const openFileDialog = () => {
-  fileInput.value?.click()
-}
+const openFileDialog = () => fileInput.value?.click()
 
 const formatFileSize = (bytes) => {
   if (bytes === 0) return '0 Bytes'
@@ -311,42 +201,27 @@ const formatFileSize = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+const setExpiry = (type, val) => {
+  uploadOptions.value.expiryType = type
+  uploadOptions.value.quickExpiry = val
+}
+
 const uploadFile = async () => {
   if (!selectedFile.value) return
-
   try {
-    // Determine expiry value based on selected type
     let expiryValue = 'never'
-
     if (uploadOptions.value.expiryType === 'quick') {
       expiryValue = uploadOptions.value.quickExpiry
     } else if (uploadOptions.value.expiryType === 'custom' && uploadOptions.value.customExpiry) {
       expiryValue = new Date(uploadOptions.value.customExpiry).toISOString()
     }
-
-    const options = {
-      expiry: expiryValue,
-      unlimited: uploadOptions.value.unlimited,
-    }
-
+    const options = { expiry: expiryValue, unlimited: uploadOptions.value.unlimited }
     await filesStore.uploadFile(selectedFile.value, options)
     success('File uploaded successfully!')
     clearFile()
+    emit('file-uploaded')
   } catch (err) {
-    error('Failed to upload file: ' + (err.response?.data?.message || err.message))
+    error('Upload failed: ' + (err.response?.data?.message || err.message))
   }
 }
-
-// Drag events
-const handleDragOver = () => {
-  isDragOver.value = true
-}
-
-const handleDragLeave = () => {
-  isDragOver.value = false
-}
-
-// Add event listeners
-document.addEventListener('dragenter', handleDragOver)
-document.addEventListener('dragleave', handleDragLeave)
 </script>

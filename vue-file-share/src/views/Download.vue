@@ -1,143 +1,136 @@
 <template>
-  <div class="min-h-screen bg-gray-50 py-12">
-    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
-      <!-- Loading State -->
-      <div v-if="isLoading" class="text-center">
-        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-        <p class="mt-2 text-gray-600">Checking file...</p>
+  <div
+    class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 px-4"
+  >
+    <div class="w-full max-w-lg space-y-8">
+      <!-- Loading -->
+      <div v-if="isLoading" class="flex flex-col items-center py-20">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-4 border-blue-600"></div>
+        <p class="mt-4 text-gray-600 font-medium">Checking file...</p>
       </div>
 
-      <!-- File Info -->
-      <div v-else-if="fileStatus" class="bg-white rounded-lg shadow p-8">
-        <div class="text-center mb-8">
-          <svg
-            class="mx-auto h-16 w-16 text-blue-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-            />
-          </svg>
-          <h1 class="mt-4 text-2xl font-bold text-gray-900">File Download</h1>
+      <!-- File Card -->
+      <div
+        v-else-if="fileStatus"
+        class="bg-white/70 backdrop-blur-lg shadow-xl rounded-2xl p-8 border border-gray-100 animate-fadeIn"
+      >
+        <div class="flex flex-col items-center text-center mb-6">
+          <ArrowDownTrayIcon class="h-12 w-12 text-blue-600 mb-3" />
+          <h1 class="text-2xl font-extrabold text-gray-900">File Download</h1>
         </div>
 
-        <div v-if="fileStatus.valid" class="space-y-6">
-          <!-- File Details -->
-          <div class="bg-gray-50 rounded-lg p-4">
-            <h2 class="text-lg font-medium text-gray-900 mb-3">File Information</h2>
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between">
-                <span class="text-gray-600">File Name:</span>
-                <span class="font-medium">{{ fileStatus.fileName }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600">File Size:</span>
-                <span class="font-medium">{{ formatFileSize(fileStatus.fileSize) }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-600">Downloads:</span>
-                <span class="font-medium">{{ fileStatus.downloadCount }}</span>
-              </div>
-              <div v-if="fileStatus.expiresAt" class="flex justify-between">
-                <span class="text-gray-600">Expires:</span>
-                <span class="font-medium">{{ formatDate(fileStatus.expiresAt) }}</span>
-              </div>
+        <!-- Valid File -->
+        <div v-if="fileStatus.valid" class="space-y-8">
+          <!-- File Info -->
+          <div class="divide-y divide-gray-100">
+            <div class="flex justify-between py-2 text-sm">
+              <span class="flex items-center gap-1 text-gray-500">
+                <DocumentTextIcon class="h-4 w-4" /> File
+              </span>
+              <span class="font-medium text-gray-900">{{ fileStatus.fileName }}</span>
+            </div>
+            <div class="flex justify-between py-2 text-sm">
+              <span class="flex items-center gap-1 text-gray-500">
+                <ArchiveBoxIcon class="h-4 w-4" /> Size
+              </span>
+              <span class="font-medium">{{ formatFileSize(fileStatus.fileSize) }}</span>
+            </div>
+            <div class="flex justify-between py-2 text-sm">
+              <span class="flex items-center gap-1 text-gray-500">
+                <ArrowDownTrayIcon class="h-4 w-4" /> Downloads
+              </span>
+              <span class="font-medium">{{ fileStatus.downloadCount }}</span>
+            </div>
+            <div v-if="fileStatus.expiresAt" class="flex justify-between py-2 text-sm">
+              <span class="flex items-center gap-1 text-gray-500">
+                <ClockIcon class="h-4 w-4" /> Expires
+              </span>
+              <span class="font-medium">{{ formatDate(fileStatus.expiresAt) }}</span>
             </div>
           </div>
 
-          <!-- Download Button -->
+          <!-- Download Button / Controls -->
           <div class="text-center">
-            <button
-              class="bg-blue-600 text-white hover:bg-blue-700 px-8 py-3 rounded-lg text-lg font-medium transition-colors flex items-center justify-center space-x-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="isDownloading"
-              @click="downloadFile"
-            >
-              <ArrowDownTrayIcon v-if="!isDownloading" class="h-5 w-5" />
-              <div
-                v-if="isDownloading"
-                class="animate-spin rounded-full h-5 w-5 border-b-2 border-white"
-              ></div>
-              <span>{{ isDownloading ? 'Downloading...' : 'Download File' }}</span>
-            </button>
+            <div v-if="!isDownloading">
+              <button
+                class="px-8 py-3 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-md hover:from-blue-700 hover:to-purple-700 transition flex items-center justify-center gap-2"
+                @click="downloadFile"
+              >
+                <ArrowDownTrayIcon class="h-5 w-5" />
+                Download
+              </button>
+            </div>
+
+            <div v-else class="space-y-4">
+              <div class="flex justify-center gap-3">
+                <button
+                  v-if="!isPaused"
+                  class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 flex items-center gap-1"
+                  @click="pauseDownload"
+                >
+                  <PauseIcon class="h-4 w-4" /> Pause
+                </button>
+                <button
+                  v-else
+                  class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-1"
+                  @click="resumeDownload"
+                >
+                  <PlayIcon class="h-4 w-4" /> Resume
+                </button>
+                <button
+                  class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-1"
+                  @click="stopDownload"
+                >
+                  <StopIcon class="h-4 w-4" /> Stop
+                </button>
+              </div>
+              <p class="text-sm text-gray-600 text-center">
+                {{ isPaused ? 'Download paused' : 'Downloading...' }}
+              </p>
+            </div>
           </div>
 
-          <!-- Download Progress -->
-          <div v-if="isDownloading" class="mt-6">
-            <div class="bg-gray-50 rounded-lg p-4">
-              <div class="flex justify-between items-center mb-2">
-                <span class="text-sm font-medium text-gray-700">Download Progress</span>
-                <span class="text-sm text-gray-500">{{ downloadProgress }}%</span>
-              </div>
-
-              <!-- Progress Bar -->
-              <div class="w-full bg-gray-200 rounded-full h-3">
-                <div
-                  class="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out"
-                  :style="{ width: downloadProgress + '%' }"
-                ></div>
-              </div>
-
-              <!-- Download Stats -->
-              <div class="flex justify-between text-xs text-gray-500 mt-2">
-                <span
-                  >{{ formatFileSize(downloadedBytes) }} / {{ formatFileSize(totalBytes) }}</span
-                >
-                <span v-if="downloadSpeed > 0">{{ formatFileSize(downloadSpeed) }}/s</span>
-              </div>
+          <!-- Progress -->
+          <div v-if="isDownloading" class="pt-4">
+            <div class="flex justify-between text-xs font-medium text-gray-500 mb-2">
+              <span>{{ formatFileSize(downloadedBytes) }} / {{ formatFileSize(totalBytes) }}</span>
+              <span v-if="!isPaused && downloadSpeed > 0"
+                >{{ formatFileSize(downloadSpeed) }}/s</span
+              >
+              <span v-if="isPaused" class="text-yellow-600 font-semibold">Paused</span>
+            </div>
+            <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                class="h-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-500 ease-out"
+                :style="{ width: downloadProgress + '%' }"
+              ></div>
             </div>
           </div>
         </div>
 
         <!-- Invalid File -->
-        <div v-else class="text-center">
-          <svg
-            class="mx-auto h-16 w-16 text-red-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-            />
-          </svg>
-          <h2 class="mt-4 text-xl font-medium text-red-900">File Not Available</h2>
-          <p class="mt-2 text-gray-600">
-            This file may have expired, been removed, or the download link is invalid.
+        <div v-else class="flex flex-col items-center text-center py-8">
+          <XCircleIcon class="h-12 w-12 text-red-500 mb-3" />
+          <h2 class="text-lg font-bold text-red-600">File Not Available</h2>
+          <p class="text-gray-500 mt-2 text-sm">
+            This file may have expired, been removed, or the link is invalid.
           </p>
         </div>
       </div>
 
-      <!-- Error State -->
-      <div v-else-if="error" class="bg-white rounded-lg shadow p-8 text-center">
-        <svg
-          class="mx-auto h-16 w-16 text-red-500"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <h2 class="mt-4 text-xl font-medium text-red-900">Error</h2>
-        <p class="mt-2 text-gray-600">{{ error }}</p>
+      <!-- Error -->
+      <div
+        v-else
+        class="bg-white/70 backdrop-blur-lg shadow-xl rounded-2xl p-8 text-center border border-red-100"
+      >
+        <ExclamationCircleIcon class="h-12 w-12 text-red-500 mb-3 mx-auto" />
+        <h2 class="text-lg font-bold text-red-600">Something went wrong</h2>
+        <p class="mt-2 text-gray-500">{{ error }}</p>
         <button
-          class="mt-4 bg-blue-600 text-white hover:bg-blue-700 px-6 py-2 rounded-md transition-colors flex items-center space-x-1 mx-auto"
+          class="mt-4 px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 flex items-center gap-2 mx-auto"
           @click="checkFile"
         >
-          <ArrowPathIcon class="h-4 w-4" />
-          <span>Try Again</span>
+          <ArrowPathIcon class="h-4 w-4" /> Try Again
         </button>
       </div>
     </div>
@@ -149,7 +142,18 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useFilesStore } from '../stores/files'
 import { useToast } from '../composables/useToast'
-import { ArrowDownTrayIcon, ArrowPathIcon } from '@heroicons/vue/24/outline'
+import {
+  ArrowDownTrayIcon,
+  ArrowPathIcon,
+  DocumentTextIcon,
+  ArchiveBoxIcon,
+  ClockIcon,
+  PauseIcon,
+  PlayIcon,
+  StopIcon,
+  XCircleIcon,
+  ExclamationCircleIcon,
+} from '@heroicons/vue/24/outline'
 
 const route = useRoute()
 const filesStore = useFilesStore()
@@ -157,6 +161,7 @@ const { success, error: showError } = useToast()
 
 const isLoading = ref(true)
 const isDownloading = ref(false)
+const isPaused = ref(false)
 const fileStatus = ref(null)
 const error = ref('')
 const downloadProgress = ref(0)
@@ -167,6 +172,7 @@ const downloadSpeed = ref(0)
 let downloadStartTime = 0
 let lastProgressTime = 0
 let lastDownloadedBytes = 0
+let downloadAbortController = null
 
 const token = route.params.token
 
@@ -189,50 +195,101 @@ const checkFile = async () => {
 const downloadFile = async () => {
   try {
     isDownloading.value = true
+    isPaused.value = false
     downloadProgress.value = 0
     downloadedBytes.value = 0
     totalBytes.value = 0
     downloadSpeed.value = 0
 
+    // Create new abort controller for this download
+    if (typeof AbortController !== 'undefined') {
+      downloadAbortController = new AbortController()
+    } else {
+      console.warn('AbortController is not supported in this browser')
+      downloadAbortController = null
+    }
+
     downloadStartTime = Date.now()
     lastProgressTime = downloadStartTime
     lastDownloadedBytes = 0
 
-    await filesStore.downloadFileWithProgress(token, (progressData) => {
-      downloadProgress.value = progressData.progress
-      downloadedBytes.value = progressData.loaded
-      totalBytes.value = progressData.total
+    await filesStore.downloadFileWithProgress(
+      token,
+      (progressData) => {
+        if (isPaused.value) return // Skip updates when paused
 
-      // Calculate download speed
-      const currentTime = Date.now()
-      const timeDiff = currentTime - lastProgressTime
+        downloadProgress.value = progressData.progress
+        downloadedBytes.value = progressData.loaded
+        totalBytes.value = progressData.total
 
-      if (timeDiff > 500) {
-        // Update speed every 500ms
-        const bytesDiff = progressData.loaded - lastDownloadedBytes
-        downloadSpeed.value = Math.round((bytesDiff / timeDiff) * 1000) // bytes per second
-        lastProgressTime = currentTime
-        lastDownloadedBytes = progressData.loaded
-      }
-    })
+        // Calculate download speed
+        const currentTime = Date.now()
+        const timeDiff = currentTime - lastProgressTime
 
-    success('File downloaded successfully!')
+        if (timeDiff > 500) {
+          // Update speed every 500ms
+          const bytesDiff = progressData.loaded - lastDownloadedBytes
+          downloadSpeed.value = Math.round((bytesDiff / timeDiff) * 1000) // bytes per second
+          lastProgressTime = currentTime
+          lastDownloadedBytes = progressData.loaded
+        }
+      },
+      downloadAbortController,
+    )
 
-    // Reset progress after a delay
-    setTimeout(() => {
-      downloadProgress.value = 0
-      downloadedBytes.value = 0
-      totalBytes.value = 0
-      downloadSpeed.value = 0
-    }, 2000)
+    if (isDownloading.value) {
+      success('File downloaded successfully!')
 
-    // Refresh file status to update download count
-    await checkFile()
+      // Reset progress after a delay
+      setTimeout(() => {
+        downloadProgress.value = 0
+        downloadedBytes.value = 0
+        totalBytes.value = 0
+        downloadSpeed.value = 0
+      }, 2000)
+
+      // Refresh file status to update download count
+      await checkFile()
+    }
   } catch (err) {
-    showError('Download failed: ' + (err.message || 'Unknown error'))
+    if (err.message === 'Download cancelled') {
+      // Don't show error for user-initiated cancellation
+      console.log('Download was cancelled by user')
+    } else {
+      showError('Download failed: ' + (err.message || 'Unknown error'))
+    }
   } finally {
     isDownloading.value = false
+    isPaused.value = false
+    downloadAbortController = null
   }
+}
+
+const pauseDownload = () => {
+  isPaused.value = true
+  downloadSpeed.value = 0
+}
+
+const resumeDownload = () => {
+  isPaused.value = false
+  lastProgressTime = Date.now()
+  lastDownloadedBytes = downloadedBytes.value
+}
+
+const stopDownload = () => {
+  // Cancel the ongoing download request
+  if (downloadAbortController) {
+    downloadAbortController.abort()
+    downloadAbortController = null
+  }
+
+  isDownloading.value = false
+  isPaused.value = false
+  downloadProgress.value = 0
+  downloadedBytes.value = 0
+  totalBytes.value = 0
+  downloadSpeed.value = 0
+  showError('Download was cancelled')
 }
 
 const formatFileSize = (bytes) => {

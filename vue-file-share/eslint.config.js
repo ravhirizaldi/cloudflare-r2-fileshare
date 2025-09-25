@@ -34,6 +34,7 @@ export default [
         XMLHttpRequest: 'readonly',
         FileReader: 'readonly',
         fetch: 'readonly',
+        AbortController: 'readonly',
       },
     },
     rules: {
