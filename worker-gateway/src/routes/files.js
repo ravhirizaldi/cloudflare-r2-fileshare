@@ -1,4 +1,5 @@
 import { requireAuth, jsonResponse, errorResponse } from '../helpers/auth.js';
+import { logAuditEvent, getClientIP, recordDownloadHistory, updateFileStats, archiveExpiredFile } from '../helpers/audit.js';
 
 // Helper function to parse duration strings (e.g., '1h', '30m', '1d', '1month')
 function parseDuration(duration) {
@@ -71,121 +72,220 @@ export async function handleUpload(req, env) {
 		return errorResponse('Unauthorized', 401);
 	}
 
-	const form = await req.formData();
-	const file = form.get('file');
-	if (!file) {
-		return errorResponse('No file provided');
-	}
+	const ipAddress = getClientIP(req);
+	const userAgent = req.headers.get('User-Agent') || 'unknown';
 
-	// Check if this is a masked executable file
-	const originalName = form.get('originalName');
-	const actualFileName = originalName || file.name;
+	try {
+		const form = await req.formData();
+		const file = form.get('file');
+		if (!file) {
+			await logAuditEvent(env, {
+				userId: authUser.sub,
+				action: 'upload_file',
+				resourceType: 'file',
+				ipAddress,
+				userAgent,
+				success: false,
+				errorMessage: 'No file provided',
+			});
+			return errorResponse('No file provided');
+		}
 
-	if (originalName) {
-		console.log(`🔒 Processing masked executable: "${file.name}" with original name: "${originalName}"`);
-	}
+		// Check if this is a masked executable file
+		const originalName = form.get('originalName');
+		const actualFileName = originalName || file.name;
 
-	// Store the original name in metadata for later restoration
-	const displayName = originalName || file.name;
+		if (originalName) {
+			console.log(`🔒 Processing masked executable: "${file.name}" with original name: "${originalName}"`);
+		}
 
-	const url = new URL(req.url);
-	const unlimited = url.searchParams.get('unlimited') === 'true';
-	const expiryParam = url.searchParams.get('expiry');
-	const key = `${authUser.sub}/${Date.now()}_${file.name}`; // Keep the masked name for storage
+		// Store the original name in metadata for later restoration
+		const displayName = originalName || file.name;
 
-	await env.MY_BUCKET.put(key, file.stream(), {
-		httpMetadata: {
-			contentType: file.type,
-			// Store original name in custom metadata
-			...(originalName && { 'x-original-name': originalName }),
-		},
-	});
+		const url = new URL(req.url);
+		const unlimited = url.searchParams.get('unlimited') === 'true';
+		const expiryParam = url.searchParams.get('expiry');
+		const key = `${authUser.sub}/${Date.now()}_${file.name}`; // Keep the masked name for storage
 
-	// Calculate expiry time
-	let expiresAt = null;
-	let expiryDescription = 'Never expires';
+		await env.MY_BUCKET.put(key, file.stream(), {
+			httpMetadata: {
+				contentType: file.type,
+				// Store original name in custom metadata
+				...(originalName && { 'x-original-name': originalName }),
+			},
+		});
 
-	if (expiryParam && expiryParam !== 'never') {
-		if (expiryParam.includes('T')) {
-			// Custom date-time string
-			const customExpiry = new Date(expiryParam);
-			if (!isNaN(customExpiry.getTime())) {
-				expiresAt = customExpiry.getTime();
-				expiryDescription = customExpiry.toLocaleString();
-			}
-		} else {
-			// Duration format (e.g., '1h', '30m', '1d', '30d')
-			const duration = parseDuration(expiryParam);
-			console.log(`Parsing expiry: "${expiryParam}" -> ${duration}ms -> ${formatDuration(duration)}`);
-			if (duration > 0) {
-				expiresAt = Date.now() + duration;
-				expiryDescription = formatDuration(duration);
+		// Calculate expiry time
+		let expiresAt = null;
+		let expiryDescription = 'Never expires';
+
+		if (expiryParam && expiryParam !== 'never') {
+			if (expiryParam.includes('T')) {
+				// Custom date-time string
+				const customExpiry = new Date(expiryParam);
+				if (!isNaN(customExpiry.getTime())) {
+					expiresAt = customExpiry.getTime();
+					expiryDescription = customExpiry.toLocaleString();
+				}
+			} else {
+				// Duration format (e.g., '1h', '30m', '1d', '30d')
+				const duration = parseDuration(expiryParam);
+				console.log(`Parsing expiry: "${expiryParam}" -> ${duration}ms -> ${formatDuration(duration)}`);
+				if (duration > 0) {
+					expiresAt = Date.now() + duration;
+					expiryDescription = formatDuration(duration);
+				}
 			}
 		}
-	}
 
-	const token = crypto.randomUUID();
-	const meta = {
-		key,
-		name: displayName, // Use the original name for display
-		mime: file.type,
-		expires: expiresAt,
-		downloads: 0,
-		maxDownloads: unlimited ? null : 5,
-		unlimitedDownloads: unlimited,
-		owner: authUser.sub,
-		originalName: originalName, // Store original name if different
-	};
-
-	await env.TOKENS.put(`tokens:${token}`, JSON.stringify(meta));
-
-	// Insert ke D1 - store the display name
-	await env.DB.prepare(
-		`INSERT INTO files (id, owner, filename, key, mime, unlimited, max_downloads, downloads, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-	)
-		.bind(
-			token,
-			authUser.sub,
-			displayName, // Use display name in database
+		const token = crypto.randomUUID();
+		const meta = {
 			key,
-			file.type || 'application/octet-stream',
-			unlimited ? 1 : 0,
-			unlimited ? null : meta.maxDownloads,
-			0,
-			expiresAt
-		)
-		.run();
+			name: displayName, // Use the original name for display
+			mime: file.type,
+			expires: expiresAt,
+			downloads: 0,
+			maxDownloads: unlimited ? null : 5,
+			unlimitedDownloads: unlimited,
+			owner: authUser.sub,
+			originalName: originalName, // Store original name if different
+		};
 
-	return jsonResponse({
-		link: `${url.origin}/r/${token}`,
-		expiresIn: expiryDescription,
-		unlimited,
-		maxDownloads: unlimited ? '∞' : meta.maxDownloads,
-		remainingDownloads: unlimited ? '∞' : meta.maxDownloads,
-		expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
-	});
+		await env.TOKENS.put(`tokens:${token}`, JSON.stringify(meta));
+
+		// Insert ke D1 - store the display name with additional fields
+		await env.DB.prepare(
+			`INSERT INTO files (id, owner, filename, key, mime, unlimited, max_downloads, downloads, expires_at, created_at, file_size)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		)
+			.bind(
+				token,
+				authUser.sub,
+				displayName, // Use display name in database
+				key,
+				file.type || 'application/octet-stream',
+				unlimited ? 1 : 0,
+				unlimited ? null : meta.maxDownloads,
+				0,
+				expiresAt,
+				Date.now(),
+				file.size || 0
+			)
+			.run();
+
+		// Log successful upload
+		await logAuditEvent(env, {
+			userId: authUser.sub,
+			action: 'upload_file',
+			resourceType: 'file',
+			resourceId: token,
+			ipAddress,
+			userAgent,
+			details: {
+				filename: displayName,
+				size: file.size,
+				mime: file.type,
+				unlimited,
+				expires: expiresAt,
+			},
+			success: true,
+		});
+
+		return jsonResponse({
+			link: `${url.origin}/r/${token}`,
+			expiresIn: expiryDescription,
+			unlimited,
+			maxDownloads: unlimited ? '∞' : meta.maxDownloads,
+			remainingDownloads: unlimited ? '∞' : meta.maxDownloads,
+			expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+		});
+	} catch (error) {
+		console.error('Upload error:', error);
+		await logAuditEvent(env, {
+			userId: authUser.sub,
+			action: 'upload_file',
+			resourceType: 'file',
+			ipAddress,
+			userAgent,
+			success: false,
+			errorMessage: error.message,
+		});
+		return errorResponse('Upload failed', 500);
+	}
 }
 
 export async function handleDownload(req, env, token) {
+	const ipAddress = getClientIP(req);
+	const userAgent = req.headers.get('User-Agent') || 'unknown';
+	const downloadStartTime = Date.now();
+
 	let meta = await env.TOKENS.get(`tokens:${token}`, 'json');
 	if (!meta) {
+		// Record failed download attempt
+		await recordDownloadHistory(env, {
+			fileId: token,
+			ipAddress,
+			userAgent,
+			success: false,
+		});
 		return errorResponse('File not found', 404);
 	}
 
 	// Check if file has expired (only if expires is not null)
 	if (meta.expires && Date.now() > meta.expires) {
+		// Archive expired file before cleanup
+		const fileData = {
+			id: token,
+			filename: meta.name,
+			owner: meta.owner,
+			key: meta.key,
+			mime: meta.mime,
+			file_size: meta.size || 0,
+			created_at: Date.now(), // We don't have the original created_at, use current
+			downloads: meta.downloads,
+		};
+		await archiveExpiredFile(env, fileData, 'time_expired');
+
 		await env.TOKENS.delete(`tokens:${token}`);
 		await env.MY_BUCKET.delete(meta.key);
 		await env.DB.prepare(`DELETE FROM files WHERE id = ?`).bind(token).run();
+
+		await recordDownloadHistory(env, {
+			fileId: token,
+			ipAddress,
+			userAgent,
+			success: false,
+		});
+
 		return errorResponse('File expired', 410);
 	}
 
 	if (!meta.unlimitedDownloads) {
 		if (meta.downloads >= meta.maxDownloads) {
+			// Archive file that reached download limit
+			const fileData = {
+				id: token,
+				filename: meta.name,
+				owner: meta.owner,
+				key: meta.key,
+				mime: meta.mime,
+				file_size: meta.size || 0,
+				created_at: Date.now(), // We don't have the original created_at
+				downloads: meta.downloads,
+			};
+			await archiveExpiredFile(env, fileData, 'download_limit_reached');
+
 			await env.TOKENS.delete(`tokens:${token}`);
 			await env.MY_BUCKET.delete(meta.key);
 			await env.DB.prepare(`DELETE FROM files WHERE id = ?`).bind(token).run();
+
+			await recordDownloadHistory(env, {
+				fileId: token,
+				ipAddress,
+				userAgent,
+				success: false,
+			});
+
 			return errorResponse('Download limit reached', 410);
 		}
 
@@ -196,6 +296,12 @@ export async function handleDownload(req, env, token) {
 
 	const obj = await env.MY_BUCKET.get(meta.key);
 	if (!obj) {
+		await recordDownloadHistory(env, {
+			fileId: token,
+			ipAddress,
+			userAgent,
+			success: false,
+		});
 		return errorResponse('File not found in storage', 404);
 	}
 
@@ -229,6 +335,18 @@ export async function handleDownload(req, env, token) {
 			return errorResponse('Range not satisfiable', 416);
 		}
 
+		// Record partial download
+		await recordDownloadHistory(env, {
+			fileId: token,
+			ipAddress,
+			userAgent,
+			downloadDuration: Date.now() - downloadStartTime,
+			bytesDownloaded: chunkSize,
+			success: true,
+		});
+
+		await updateFileStats(env, token, chunkSize);
+
 		// Anti-IDM headers for range requests
 		const rangeAntiIDMHeaders = isExecutable
 			? {
@@ -260,6 +378,18 @@ export async function handleDownload(req, env, token) {
 			},
 		});
 	}
+
+	// Record full download
+	await recordDownloadHistory(env, {
+		fileId: token,
+		ipAddress,
+		userAgent,
+		downloadDuration: Date.now() - downloadStartTime,
+		bytesDownloaded: contentLength,
+		success: true,
+	});
+
+	await updateFileStats(env, token, contentLength);
 
 	// For executable files, use anti-IDM headers
 	const antiIDMHeaders = isExecutable
@@ -310,42 +440,74 @@ export async function handleMyFiles(req, env) {
 		return errorResponse('Unauthorized', 401);
 	}
 
-	const url = new URL(req.url);
-	const page = parseInt(url.searchParams.get('page') || '1');
-	const limit = parseInt(url.searchParams.get('limit') || '10');
-	const offset = (page - 1) * limit;
+	const ipAddress = getClientIP(req);
+	const userAgent = req.headers.get('User-Agent') || 'unknown';
 
-	const { results } = await env.DB.prepare(
-		`SELECT id, filename, key, mime, unlimited, max_downloads, downloads, expires_at
-         FROM files WHERE owner = ? ORDER BY expires_at DESC LIMIT ? OFFSET ?`
-	)
-		.bind(authUser.sub, limit, offset)
-		.all();
+	try {
+		const url = new URL(req.url);
+		const page = parseInt(url.searchParams.get('page') || '1');
+		const limit = parseInt(url.searchParams.get('limit') || '10');
+		const offset = (page - 1) * limit;
 
-	const files = results.map((r) => {
-		let expiresIn = 'never';
-		if (r.expires_at) {
-			const remainingMs = Math.max(0, r.expires_at - Date.now());
-			if (remainingMs === 0) {
-				expiresIn = '0s'; // Expired
-			} else {
-				expiresIn = formatDuration(remainingMs);
+		const { results } = await env.DB.prepare(
+			`SELECT id, filename, key, mime, unlimited, max_downloads, downloads, expires_at, created_at, file_size
+         FROM files WHERE owner = ? AND is_deleted = 0 ORDER BY created_at DESC LIMIT ? OFFSET ?`
+		)
+			.bind(authUser.sub, limit, offset)
+			.all();
+
+		const files = results.map((r) => {
+			let expiresIn = 'never';
+			if (r.expires_at) {
+				const remainingMs = Math.max(0, r.expires_at - Date.now());
+				if (remainingMs === 0) {
+					expiresIn = '0s'; // Expired
+				} else {
+					expiresIn = formatDuration(remainingMs);
+				}
 			}
-		}
 
-		return {
-			token: r.id,
-			file: r.filename,
-			key: r.key,
-			mime: r.mime,
-			unlimited: !!r.unlimited,
-			remainingDownloads: r.unlimited ? '∞' : r.max_downloads - r.downloads,
-			expiresIn,
-			expiresAt: r.expires_at ? new Date(r.expires_at).toISOString() : null,
-		};
-	});
+			return {
+				token: r.id,
+				file: r.filename,
+				key: r.key,
+				mime: r.mime,
+				unlimited: !!r.unlimited,
+				remainingDownloads: r.unlimited ? '∞' : r.max_downloads - r.downloads,
+				expiresIn,
+				expiresAt: r.expires_at ? new Date(r.expires_at).toISOString() : null,
+				createdAt: r.created_at ? new Date(r.created_at).toISOString() : null,
+				fileSize: r.file_size || 0,
+				downloads: r.downloads || 0,
+			};
+		});
 
-	return jsonResponse({ files, page, limit });
+		await logAuditEvent(env, {
+			userId: authUser.sub,
+			action: 'view_my_files',
+			resourceType: 'user',
+			resourceId: authUser.sub,
+			ipAddress,
+			userAgent,
+			details: { page, limit, fileCount: files.length },
+			success: true,
+		});
+
+		return jsonResponse({ files, page, limit });
+	} catch (error) {
+		console.error('Get my files error:', error);
+		await logAuditEvent(env, {
+			userId: authUser.sub,
+			action: 'view_my_files',
+			resourceType: 'user',
+			resourceId: authUser.sub,
+			ipAddress,
+			userAgent,
+			success: false,
+			errorMessage: error.message,
+		});
+		return errorResponse('Internal server error', 500);
+	}
 }
 
 export async function handleFileStatus(req, env, token) {
@@ -454,4 +616,155 @@ export async function handlePublicFileStatus(req, env, token) {
 		remainingDownloads: meta.unlimitedDownloads ? '∞' : meta.maxDownloads - meta.downloads,
 		neverExpires: !meta.expires,
 	});
+}
+
+export async function handleBulkDelete(req, env) {
+	if (req.method !== 'DELETE') {
+		return errorResponse('Method not allowed', 405);
+	}
+
+	const authUser = await requireAuth(req, env);
+	if (!authUser) {
+		return errorResponse('Unauthorized', 401);
+	}
+
+	const ipAddress = getClientIP(req);
+	const userAgent = req.headers.get('User-Agent') || 'unknown';
+
+	try {
+		const { fileTokens, permanent = true } = await req.json(); // Default to permanent deletion
+
+		if (!fileTokens || !Array.isArray(fileTokens) || fileTokens.length === 0) {
+			await logAuditEvent(env, {
+				userId: authUser.sub,
+				action: 'bulk_delete_files',
+				resourceType: 'file',
+				ipAddress,
+				userAgent,
+				success: false,
+				errorMessage: 'No file tokens provided',
+			});
+			return errorResponse('No file tokens provided', 400);
+		}
+
+		const deletedFiles = [];
+		const failedFiles = [];
+
+		// Process each file token
+		for (const token of fileTokens) {
+			try {
+				// Get file info from database
+				const { results } = await env.DB.prepare(
+					`SELECT id, owner, filename, key, mime, file_size, created_at, downloads 
+					 FROM files WHERE id = ? AND is_deleted = 0`
+				)
+					.bind(token)
+					.all();
+
+				if (results.length === 0) {
+					failedFiles.push({ token, error: 'File not found' });
+					continue;
+				}
+
+				const fileData = results[0];
+
+				// Check if user is owner or admin
+				if (authUser.sub !== fileData.owner && authUser.role !== 'admin') {
+					failedFiles.push({ token, error: 'Forbidden - not file owner' });
+					continue;
+				}
+
+				// Always perform permanent deletion
+				// 1. Archive the file before deletion
+				await archiveExpiredFile(
+					env,
+					{
+						id: fileData.id,
+						filename: fileData.filename,
+						owner: fileData.owner,
+						key: fileData.key,
+						mime: fileData.mime,
+						file_size: fileData.file_size || 0,
+						created_at: fileData.created_at,
+						downloads: fileData.downloads,
+					},
+					'manual_deletion'
+				);
+
+				// 2. Delete from KV store
+				await env.TOKENS.delete(`tokens:${token}`);
+
+				// 3. Delete from R2 storage
+				await env.MY_BUCKET.delete(fileData.key);
+
+				// 4. Delete from database
+				await env.DB.prepare(`DELETE FROM files WHERE id = ?`).bind(token).run();
+
+				deletedFiles.push({
+					token,
+					filename: fileData.filename,
+					permanent: true, // Always permanent
+				});
+
+				// Log individual file deletion
+				await logAuditEvent(env, {
+					userId: authUser.sub,
+					action: 'permanent_delete_file', // Always permanent
+					resourceType: 'file',
+					resourceId: token,
+					ipAddress,
+					userAgent,
+					details: {
+						filename: fileData.filename,
+						fileSize: fileData.file_size,
+						permanent: true,
+					},
+					success: true,
+				});
+			} catch (error) {
+				console.error(`Failed to delete file ${token}:`, error);
+				failedFiles.push({ token, error: error.message });
+			}
+		}
+
+		// Log bulk deletion summary
+		await logAuditEvent(env, {
+			userId: authUser.sub,
+			action: 'bulk_delete_files',
+			resourceType: 'file',
+			ipAddress,
+			userAgent,
+			details: {
+				totalRequested: fileTokens.length,
+				successCount: deletedFiles.length,
+				failedCount: failedFiles.length,
+				permanent: true, // Always permanent
+			},
+			success: true,
+		});
+
+		return jsonResponse({
+			message: `Bulk permanent deletion completed`,
+			summary: {
+				total: fileTokens.length,
+				deleted: deletedFiles.length,
+				failed: failedFiles.length,
+				permanent: true, // Always permanent
+			},
+			deletedFiles,
+			failedFiles,
+		});
+	} catch (error) {
+		console.error('Bulk delete error:', error);
+		await logAuditEvent(env, {
+			userId: authUser.sub,
+			action: 'bulk_delete_files',
+			resourceType: 'file',
+			ipAddress,
+			userAgent,
+			success: false,
+			errorMessage: error.message,
+		});
+		return errorResponse('Bulk deletion failed', 500);
+	}
 }

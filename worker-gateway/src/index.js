@@ -1,5 +1,6 @@
 import { handleRegister, handleLogin, handleProfile } from './routes/auth.js';
-import { handleUpload, handleDownload, handleMyFiles, handleFileStatus, handlePublicFileStatus } from './routes/files.js';
+import { handleUpload, handleDownload, handleMyFiles, handleFileStatus, handlePublicFileStatus, handleBulkDelete } from './routes/files.js';
+import { handleDeleteFile, handleFileStats, handleUserStats, handleAuditTrail, handleRestoreFile } from './routes/admin.js';
 import { cleanupExpiredFiles } from './helpers/cleanup.js';
 import { jsonResponse } from './helpers/auth.js';
 
@@ -32,6 +33,37 @@ export function createRouter() {
 
 				if (path === '/myfiles') {
 					return await handleMyFiles(req, env);
+				}
+
+				// Bulk delete route
+				if (path === '/files/bulk-delete') {
+					return await handleBulkDelete(req, env);
+				}
+
+				// Admin/Stats routes
+				if (path === '/user/stats') {
+					return await handleUserStats(req, env);
+				}
+
+				if (path === '/admin/audit') {
+					return await handleAuditTrail(req, env);
+				}
+
+				if (path.startsWith('/admin/restore/')) {
+					const token = path.split('/').pop();
+					return await handleRestoreFile(req, env, token);
+				}
+
+				// Delete file route
+				if (path.startsWith('/delete/')) {
+					const token = path.split('/').pop();
+					return await handleDeleteFile(req, env, token);
+				}
+
+				// File stats route
+				if (path.startsWith('/stats/')) {
+					const token = path.split('/').pop();
+					return await handleFileStats(req, env, token);
 				}
 
 				// Download route

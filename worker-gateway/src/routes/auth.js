@@ -1,5 +1,6 @@
 import { hashPassword, signJWT, verifyJWT } from '../helpers/crypto.js';
-import { jsonResponse, errorResponse } from '../helpers/auth.js';
+import { jsonResponse, errorResponse, requireAuth } from '../helpers/auth.js';
+import { logAuditEvent, getClientIP } from '../helpers/audit.js';
 
 // ==== Auth Routes ====
 
@@ -8,21 +9,65 @@ export async function handleRegister(req, env) {
 		return errorResponse('Method not allowed', 405);
 	}
 
-	const { username, password } = await req.json();
-	if (!username || !password) {
-		return errorResponse('Missing credentials');
+	const ipAddress = getClientIP(req);
+	const userAgent = req.headers.get('User-Agent') || 'unknown';
+
+	try {
+		const { username, password } = await req.json();
+		if (!username || !password) {
+			await logAuditEvent(env, {
+				action: 'register_user',
+				resourceType: 'user',
+				ipAddress,
+				userAgent,
+				success: false,
+				errorMessage: 'Missing credentials',
+			});
+			return errorResponse('Missing credentials');
+		}
+
+		// Check if user exists
+		const { results } = await env.DB.prepare('SELECT username FROM users WHERE username = ?').bind(username).all();
+		if (results.length > 0) {
+			await logAuditEvent(env, {
+				action: 'register_user',
+				resourceType: 'user',
+				resourceId: username,
+				ipAddress,
+				userAgent,
+				success: false,
+				errorMessage: 'User already exists',
+			});
+			return errorResponse('User already exists');
+		}
+
+		const hash = await hashPassword(password);
+		await env.DB.prepare('INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)')
+			.bind(username, hash, 'user', Date.now())
+			.run();
+
+		await logAuditEvent(env, {
+			action: 'register_user',
+			resourceType: 'user',
+			resourceId: username,
+			ipAddress,
+			userAgent,
+			success: true,
+		});
+
+		return jsonResponse({ message: 'User registered successfully' });
+	} catch (error) {
+		console.error('Registration error:', error);
+		await logAuditEvent(env, {
+			action: 'register_user',
+			resourceType: 'user',
+			ipAddress,
+			userAgent,
+			success: false,
+			errorMessage: error.message,
+		});
+		return errorResponse('Registration failed', 500);
 	}
-
-	// Check if user exists
-	const { results } = await env.DB.prepare('SELECT username FROM users WHERE username = ?').bind(username).all();
-	if (results.length > 0) {
-		return errorResponse('User already exists');
-	}
-
-	const hash = await hashPassword(password);
-	await env.DB.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').bind(username, hash, 'user').run();
-
-	return jsonResponse({ message: 'User registered successfully' });
 }
 
 export async function handleLogin(req, env) {
@@ -30,21 +75,69 @@ export async function handleLogin(req, env) {
 		return errorResponse('Method not allowed', 405);
 	}
 
-	const { username, password } = await req.json();
-	const { results } = await env.DB.prepare('SELECT username, password_hash, role FROM users WHERE username = ?').bind(username).all();
+	const ipAddress = getClientIP(req);
+	const userAgent = req.headers.get('User-Agent') || 'unknown';
 
-	if (results.length === 0) {
-		return errorResponse('Invalid credentials', 401);
+	try {
+		const { username, password } = await req.json();
+		const { results } = await env.DB.prepare('SELECT username, password_hash, role FROM users WHERE username = ?').bind(username).all();
+
+		if (results.length === 0) {
+			await logAuditEvent(env, {
+				action: 'login_user',
+				resourceType: 'user',
+				resourceId: username,
+				ipAddress,
+				userAgent,
+				success: false,
+				errorMessage: 'User not found',
+			});
+			return errorResponse('Invalid credentials', 401);
+		}
+		const user = results[0];
+
+		const hash = await hashPassword(password);
+		if (hash !== user.password_hash) {
+			await logAuditEvent(env, {
+				action: 'login_user',
+				resourceType: 'user',
+				resourceId: username,
+				ipAddress,
+				userAgent,
+				success: false,
+				errorMessage: 'Invalid password',
+			});
+			return errorResponse('Invalid credentials', 401);
+		}
+
+		// Update last login time
+		await env.DB.prepare('UPDATE users SET last_login = ? WHERE username = ?').bind(Date.now(), username).run();
+
+		const token = await signJWT({ sub: username, role: user.role }, env.JWT_SECRET);
+
+		await logAuditEvent(env, {
+			userId: username,
+			action: 'login_user',
+			resourceType: 'user',
+			resourceId: username,
+			ipAddress,
+			userAgent,
+			success: true,
+		});
+
+		return jsonResponse({ token });
+	} catch (error) {
+		console.error('Login error:', error);
+		await logAuditEvent(env, {
+			action: 'login_user',
+			resourceType: 'user',
+			ipAddress,
+			userAgent,
+			success: false,
+			errorMessage: error.message,
+		});
+		return errorResponse('Login failed', 500);
 	}
-	const user = results[0];
-
-	const hash = await hashPassword(password);
-	if (hash !== user.password_hash) {
-		return errorResponse('Invalid credentials', 401);
-	}
-
-	const token = await signJWT({ sub: username, role: user.role }, env.JWT_SECRET);
-	return jsonResponse({ token });
 }
 
 export async function handleProfile(req, env) {
@@ -57,12 +150,20 @@ export async function handleProfile(req, env) {
 		return errorResponse('Unauthorized', 401);
 	}
 
+	const ipAddress = getClientIP(req);
+	const userAgent = req.headers.get('User-Agent') || 'unknown';
+
+	await logAuditEvent(env, {
+		userId: authUser.sub,
+		action: 'view_profile',
+		resourceType: 'user',
+		resourceId: authUser.sub,
+		ipAddress,
+		userAgent,
+		success: true,
+	});
+
 	return jsonResponse(authUser);
 }
 
-async function requireAuth(req, env) {
-	const auth = req.headers.get('Authorization') || '';
-	if (!auth.startsWith('Bearer ')) return null;
-	const token = auth.slice(7);
-	return await verifyJWT(token, env.JWT_SECRET);
-}
+// Remove the duplicate requireAuth function since we're importing it from auth.js
