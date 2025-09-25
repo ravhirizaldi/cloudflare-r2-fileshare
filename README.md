@@ -26,7 +26,7 @@ R2 File Share is a next-generation full-stack application that revolutionizes te
 
 ## ⭐ Core Features
 
-### 🛡️ Anti-IDM Technology (Revolutionary)
+### 🛡️ Anti-Download Manager Technology
 Our **5-layer defense system** completely bypasses Internet Download Manager and similar tools:
 
 1. **🎭 File Masking** - Executable files automatically renamed with safe extensions during upload
@@ -141,70 +141,6 @@ r2-fileshare/
 - `originalName` - Handle masked executable files
 - `page=N&limit=N` - Pagination controls
 
-## 🛡️ Anti-IDM Technology Deep Dive
-
-### The Problem
-Internet Download Manager (IDM) and similar tools often interfere with file downloads, especially executable files, causing failed downloads, corrupted files, and security vulnerabilities.
-
-### Our Revolutionary Solution
-**5-Layer Defense System** that completely bypasses download manager interference:
-
-#### Layer 1: File Masking 🎭
-```javascript
-// Automatic executable detection and masking
-Upload: program.exe → program.tmp (stored safely)
-Display: Users still see "program.exe" in interface
-```
-
-#### Layer 2: Request Disguising 🕵️
-```javascript
-// Anti-detection headers for executable downloads
-fetch(downloadUrl, {
-  headers: {
-    'Accept': 'text/html,application/xhtml+xml...',  // Browser-like
-    'Sec-Fetch-Mode': 'no-cors',                     // Avoid preflight
-    'Content-Type': 'application/json'               // Not a file download
-  }
-})
-```
-
-#### Layer 3: Server Response Masking 🛡️
-```javascript
-// Server responds differently for executables
-const headers = isExecutable ? {
-  'Content-Type': 'text/plain',           // IDM ignores text files
-  'X-Is-Executable': 'true',              // Client processing flag
-  // NO Content-Disposition header
-} : {
-  'Content-Type': mime,
-  'Content-Disposition': `attachment; filename="${name}"`
-}
-```
-
-#### Layer 4: Client-Side Evasion 🎪
-```javascript
-// Multiple fallback download strategies
-1. Data URL method with random delays (50-200ms)
-2. Hidden iframe fallback for stubborn cases  
-3. New window method with DOM manipulation
-4. Blob URL conversion with FileReader
-```
-
-#### Layer 5: Detection Avoidance 🧪
-- **Steganographic downloads** - Appears as regular web content
-- **Random timing** - Prevents pattern recognition
-- **Sequential fallbacks** - Try different methods if blocked
-- **Browser fingerprinting** - Adapts to specific browser capabilities
-
-### Protection Coverage
-| File Type | Extension | Protection Level | Success Rate |
-|-----------|-----------|------------------|--------------|
-| Windows Executables | `.exe` | Maximum | 99.9% |
-| Installers | `.msi` | Maximum | 99.8% |
-| macOS Images | `.dmg` | High | 99.7% |
-| Packages | `.pkg`, `.deb`, `.rpm` | High | 99.5% |
-| Applications | `.app` | High | 99.6% |
-| Normal Files | All others | Standard | 100% |
 
 ## 🌊 Streaming Technology
 
@@ -265,36 +201,111 @@ while (true) {
 
 ### Optimized Database Design
 ```sql
--- Users table with role-based access
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS files (
+  id TEXT PRIMARY KEY,
+  owner TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  key TEXT NOT NULL,
+  mime TEXT,
+  unlimited INTEGER DEFAULT 0,
+  max_downloads INTEGER,
+  downloads INTEGER DEFAULT 0,
+  expires_at INTEGER,
+  created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+  file_size INTEGER,
+  is_deleted INTEGER DEFAULT 0,
+  deleted_at INTEGER,
+  deleted_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_files_owner ON files(owner);
+CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at);
+CREATE INDEX IF NOT EXISTS idx_files_deleted ON files(is_deleted);
+
+CREATE TABLE IF NOT EXISTS users (
   username TEXT PRIMARY KEY,
   password_hash TEXT NOT NULL,
   role TEXT DEFAULT 'user',
-  created_at INTEGER DEFAULT (strftime('%s', 'now')),
+  created_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
   last_login INTEGER
 );
 
--- Files table with comprehensive metadata
-CREATE TABLE files (
-  id TEXT PRIMARY KEY,              -- Secure download token
-  owner TEXT NOT NULL,              -- Username (foreign key)
-  filename TEXT NOT NULL,           -- Display name (original)
-  key TEXT NOT NULL,                -- R2 storage key (may be masked)
-  mime TEXT,                        -- Content type
-  size INTEGER,                     -- File size in bytes
-  unlimited INTEGER DEFAULT 0,      -- Unlimited downloads flag
-  max_downloads INTEGER,            -- Download limit
-  downloads INTEGER DEFAULT 0,      -- Current download count
-  expires_at INTEGER,               -- Expiration timestamp
-  created_at INTEGER DEFAULT (strftime('%s', 'now')),
-  last_download INTEGER,            -- Last download timestamp
-  is_executable INTEGER DEFAULT 0   -- Protected file flag
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+-- Download history table to track who downloaded what
+CREATE TABLE IF NOT EXISTS download_history (
+  id TEXT PRIMARY KEY,
+  file_id TEXT NOT NULL,
+  downloaded_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+  ip_address TEXT,
+  user_agent TEXT,
+  browser_info TEXT,
+  country TEXT,
+  user_id TEXT,
+  download_duration INTEGER,
+  bytes_downloaded INTEGER,
+  success INTEGER DEFAULT 1,
+  FOREIGN KEY (file_id) REFERENCES files(id),
+  FOREIGN KEY (user_id) REFERENCES users(username)
 );
 
--- Indexes for performance optimization
-CREATE INDEX idx_files_owner ON files(owner);
-CREATE INDEX idx_files_expires ON files(expires_at);
-CREATE INDEX idx_users_last_login ON users(last_login);
+CREATE INDEX IF NOT EXISTS idx_download_history_file_id ON download_history(file_id);
+CREATE INDEX IF NOT EXISTS idx_download_history_downloaded_at ON download_history(downloaded_at);
+CREATE INDEX IF NOT EXISTS idx_download_history_ip ON download_history(ip_address);
+CREATE INDEX IF NOT EXISTS idx_download_history_user_id ON download_history(user_id);
+
+-- Expired files history to track expired files
+CREATE TABLE IF NOT EXISTS expired_files_history (
+  id TEXT PRIMARY KEY,
+  original_file_id TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  key TEXT NOT NULL,
+  mime TEXT,
+  file_size INTEGER,
+  created_at INTEGER,
+  expired_at INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+  total_downloads INTEGER DEFAULT 0,
+  expiry_reason TEXT -- 'time_expired', 'download_limit_reached', 'manual_deletion'
+);
+
+CREATE INDEX IF NOT EXISTS idx_expired_files_owner ON expired_files_history(owner);
+CREATE INDEX IF NOT EXISTS idx_expired_files_expired_at ON expired_files_history(expired_at);
+
+-- File statistics table for aggregated stats
+CREATE TABLE IF NOT EXISTS file_stats (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_id TEXT NOT NULL,
+  stat_date TEXT NOT NULL, -- YYYY-MM-DD format
+  download_count INTEGER DEFAULT 0,
+  unique_ips INTEGER DEFAULT 0,
+  bytes_transferred INTEGER DEFAULT 0,
+  UNIQUE(file_id, stat_date),
+  FOREIGN KEY (file_id) REFERENCES files(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_stats_file_id ON file_stats(file_id);
+CREATE INDEX IF NOT EXISTS idx_file_stats_date ON file_stats(stat_date);
+
+-- Audit trail table for all system actions
+CREATE TABLE IF NOT EXISTS audit_trail (
+  id TEXT PRIMARY KEY,
+  timestamp INTEGER DEFAULT (strftime('%s', 'now') * 1000),
+  user_id TEXT,
+  action TEXT NOT NULL, -- 'upload', 'download', 'delete', 'login', 'register', 'view_stats', etc.
+  resource_type TEXT, -- 'file', 'user', 'system'
+  resource_id TEXT, -- file_id, username, etc.
+  ip_address TEXT,
+  user_agent TEXT,
+  details TEXT, -- JSON string with additional details
+  success INTEGER DEFAULT 1,
+  error_message TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_trail_timestamp ON audit_trail(timestamp);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_user_id ON audit_trail(user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_action ON audit_trail(action);
+CREATE INDEX IF NOT EXISTS idx_audit_trail_resource ON audit_trail(resource_type, resource_id);
 ```
 
 ### KV Cache Strategy
@@ -419,37 +430,6 @@ npm run build
 - **API**: https://your-worker.your-subdomain.workers.dev
 - **Production**: Deploy frontend to your preferred hosting service
 
-## 📊 Performance & Monitoring
-
-### Bundle Optimization
-```bash
-# Frontend bundle analysis
-cd vue-file-share
-npm run build
-npm run analyze  # View bundle composition
-
-# Performance metrics
-- Core app: ~45KB gzipped
-- Anti-IDM module: ~8KB gzipped  
-- Streaming module: ~5KB gzipped
-- Total overhead: <60KB
-```
-
-### Runtime Performance
-| Operation | Normal Files | Protected Files | Large Files (100MB+) |
-|-----------|-------------|-----------------|---------------------|
-| Upload | < 100ms | +50ms (masking) | Streaming (no limit) |
-| Download | Standard | +100ms (processing) | Streaming with progress |
-| Progress Updates | 60fps smooth | 60fps smooth | Memory-efficient |
-| Memory Usage | Minimal | +2-5MB temp | Constant (streaming) |
-
-### Monitoring Features
-- **Real-time Progress**: Live download tracking with speed and ETA
-- **Error Recovery**: Automatic retry on network issues  
-- **Performance Metrics**: Component loading times and API response tracking
-- **Usage Analytics**: Download counts, popular files, user activity
-- **System Health**: Automatic cleanup logs, storage usage, error rates
-
 ## 🔒 Security & Compliance
 
 ### Security Features
@@ -461,47 +441,6 @@ npm run analyze  # View bundle composition
 - **🧹 Auto Cleanup**: Expired files automatically removed
 - **📝 audit Logging**: Security events tracked and logged
 
-### Compliance Features
-- **GDPR Ready**: User data deletion and export capabilities
-- **SOC 2 Compatible**: Cloudflare infrastructure compliance
-- **Data Residency**: Regional data storage options
-- **Encryption**: Data encrypted at rest and in transit
-- **Access Logs**: Comprehensive audit trail
-
-### Best Practices
-```javascript
-// Secure token generation
-const token = crypto.randomBytes(32).toString('hex')
-
-// Password validation
-const minLength = 8
-const requireSpecialChars = true
-const requireNumbers = true
-
-// File validation
-const allowedTypes = ['*']  // Configurable allow/deny lists
-const maxFileSize = process.env.MAX_FILE_SIZE
-const virusScan = process.env.VIRUS_SCAN_ENABLED
-```
-
-## 🧪 Testing & Quality Assurance
-
-### Automated Testing
-```bash
-# Backend tests
-cd worker-gateway
-npm test                    # Full test suite
-npm run test:anti-idm      # Anti-IDM specific tests  
-npm run test:streaming     # Streaming functionality
-npm run test:security      # Security validations
-
-# Frontend tests
-cd vue-file-share
-npm test                    # Component and unit tests
-npm run test:e2e           # End-to-end testing
-npm run test:performance   # Performance benchmarks
-```
-
 ### Manual Testing Checklist
 - [ ] **Anti-IDM Protection**: Upload `.exe` file, verify download works with IDM
 - [ ] **Streaming**: Test 100MB+ file with progress tracking
@@ -509,15 +448,6 @@ npm run test:performance   # Performance benchmarks
 - [ ] **Browser Support**: Test on Chrome, Firefox, Safari, Edge
 - [ ] **Network Conditions**: Test on slow/unstable connections
 - [ ] **Security**: Verify unauthorized access prevention
-
-### Performance Benchmarks
-| Metric | Target | Actual | Status |
-|--------|---------|---------|---------|
-| Initial Load | < 2s | 1.4s | ✅ |
-| File Upload | < 5s/10MB | 3.2s/10MB | ✅ |
-| Download Start | < 500ms | 320ms | ✅ |
-| Memory Usage | < 100MB | 45MB | ✅ |
-| Bundle Size | < 200KB | 145KB | ✅ |
 
 ## 🛠️ Advanced Configuration
 
@@ -602,132 +532,6 @@ npm run lint:all            # Lint entire project
 npm run format:all          # Format all code
 npm run type-check          # TypeScript validation
 npm run audit:security      # Security vulnerability scan
-```
-
-### 🌐 Community & Support
-- **Issues**: Report bugs and feature requests via GitHub Issues
-- **Discussions**: Community Q&A and feature discussions  
-- **Contributions**: See CONTRIBUTING.md for guidelines
-- **Security**: Report security issues via security@yourproject.com
-
-## 🏆 Technical Excellence
-
-### Code Quality Standards
-- **ESLint 9**: Latest linting with custom rules
-- **Prettier 3**: Consistent code formatting
-- **Vitest**: Modern testing framework
-- **TypeScript Ready**: Easy migration path
-- **CI/CD**: Automated testing and deployment
-
-### Performance Achievements
-- ⚡ **Sub-2s Initial Load**: Optimized bundle splitting
-- 🚀 **99.9% Uptime**: Cloudflare's global infrastructure  
-- 📱 **Mobile Optimized**: Perfect Lighthouse scores
-- 🔧 **Developer Experience**: Hot reload in <50ms
-- 📊 **Bundle Size**: <150KB total (industry-leading)
-
-### Browser Support Matrix
-| Browser | Version | Anti-IDM | Streaming | Progress |
-|---------|---------|----------|-----------|----------|
-| Chrome | 90+ | ✅ | ✅ | ✅ |
-| Firefox | 88+ | ✅ | ✅ | ✅ |
-| Safari | 14+ | ✅ | ⚠️ | ✅ |
-| Edge | 90+ | ✅ | ✅ | ✅ |
-| Mobile Safari | 14+ | ✅ | ⚠️ | ✅ |
-| Mobile Chrome | 90+ | ✅ | ✅ | ✅ |
-
-## 🎯 Use Cases & Success Stories
-
-### Enterprise File Distribution
-- **Software Companies**: Distribute executables without download manager interference
-- **Media Companies**: Share large video files with progress tracking
-- **Design Agencies**: Temporary client file sharing with automatic cleanup
-
-### Educational Institutions
-- **Course Materials**: Time-limited access to educational resources
-- **Student Submissions**: Secure file collection with download limits
-- **Research Collaboration**: Temporary sharing of sensitive research data
-
-### Healthcare & Compliance
-- **Medical Records**: HIPAA-compliant temporary file sharing
-- **Research Data**: Secure, time-limited research collaboration
-- **Patient Portals**: Temporary access to medical files
-
-### Development Teams  
-- **Build Artifacts**: Share application builds with download tracking
-- **Code Reviews**: Temporary file sharing for code review processes
-- **Client Deliverables**: Professional file delivery with branding
-
-## 🚀 Future Roadmap
-
-### Version 3.0 (Q4 2025)
-- **🤖 AI-Powered Security**: Machine learning IDM pattern detection
-- **🌐 WebRTC P2P**: Direct peer-to-peer transfers for large files
-- **🔐 End-to-End Encryption**: Client-side encryption with user keys
-- **📱 Mobile Apps**: Native iOS/Android applications
-
-### Version 3.5 (Q2 2026)
-- **🔍 Content Analysis**: AI-powered file categorization and tagging
-- **📊 Advanced Analytics**: Detailed usage metrics and insights
-- **🌍 Multi-Region**: Intelligent geo-distribution for global users
-- **🤝 API Ecosystem**: Public API for third-party integrations
-
-### Long-term Vision (2026+)
-- **🧠 Smart Predictions**: AI-powered file expiry and access predictions
-- **🔗 Blockchain Integration**: Immutable audit trails and verification
-- **🎨 White-label Solutions**: Fully customizable branded instances
-- **📡 IoT Integration**: Direct file sharing from IoT devices
-
-## 📊 Project Statistics
-
-### Development Metrics
-```
-📁 Lines of Code: ~15,000
-🧪 Test Coverage: 95%+
-🔧 Components: 25+
-📦 Dependencies: Minimal & secure
-⚡ Performance Score: 98/100
-🛡️ Security Grade: A+
-```
-
-### Feature Completeness
-- ✅ **Core Features**: 100% implemented
-- ✅ **Anti-IDM System**: 5/5 layers active
-- ✅ **Streaming**: Full implementation
-- ✅ **Security**: Enterprise-grade
-- ✅ **Performance**: Industry-leading
-- ✅ **Documentation**: Comprehensive
-
-## 🙏 Acknowledgments
-
-### Technology Partners
-- **Cloudflare**: Infrastructure and edge computing platform
-- **Vue.js**: Reactive frontend framework
-- **Tailwind CSS**: Utility-first styling framework
-- **Vite**: Next-generation build tooling
-
-### Open Source Contributors
-- Thank you to all developers who contributed code, documentation, and feedback
-- Special recognition to security researchers who helped identify and fix vulnerabilities
-- Community members who provided testing and feature suggestions
-
-### Inspiration & Research
-- Modern web security best practices
-- Download manager bypass research
-- Progressive web application standards
-- Enterprise file sharing requirements
-
----
-
-## 📄 License & Legal
-
-This project is open source and available under the **MIT License**.
-
-```
-MIT License - Copyright (c) 2025 R2 File Share Project
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files...
 ```
 
 ### Third-Party Licenses
