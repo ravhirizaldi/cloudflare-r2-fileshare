@@ -85,7 +85,11 @@
                 </button>
               </div>
               <p class="text-sm text-gray-600 text-center">
-                {{ isPaused ? 'Download paused' : 'Downloading...' }}
+                {{
+                  isPaused
+                    ? 'Download paused - Resume to continue from current position'
+                    : 'Downloading...'
+                }}
               </p>
             </div>
           </div>
@@ -168,6 +172,7 @@ const downloadProgress = ref(0)
 const downloadedBytes = ref(0)
 const totalBytes = ref(0)
 const downloadSpeed = ref(0)
+const resumeData = ref(null) // Store resume data when paused
 
 let downloadStartTime = 0
 let lastProgressTime = 0
@@ -192,14 +197,17 @@ const checkFile = async () => {
   }
 }
 
-const downloadFile = async () => {
+const downloadFile = async (useResume = false) => {
   try {
     isDownloading.value = true
-    isPaused.value = false
-    downloadProgress.value = 0
-    downloadedBytes.value = 0
-    totalBytes.value = 0
-    downloadSpeed.value = 0
+    if (!useResume) {
+      isPaused.value = false
+      downloadProgress.value = 0
+      downloadedBytes.value = 0
+      totalBytes.value = 0
+      downloadSpeed.value = 0
+      resumeData.value = null
+    }
 
     // Create new abort controller for this download
     if (typeof AbortController !== 'undefined') {
@@ -211,13 +219,14 @@ const downloadFile = async () => {
 
     downloadStartTime = Date.now()
     lastProgressTime = downloadStartTime
-    lastDownloadedBytes = 0
+    lastDownloadedBytes = useResume && resumeData.value ? resumeData.value.loaded : 0
 
-    await filesStore.downloadFileWithProgress(
+    const startByte = useResume && resumeData.value ? resumeData.value.loaded : 0
+    const chunks = useResume && resumeData.value ? resumeData.value.chunks : []
+
+    await filesStore.downloadFileWithProgressResumable(
       token,
       (progressData) => {
-        if (isPaused.value) return // Skip updates when paused
-
         downloadProgress.value = progressData.progress
         downloadedBytes.value = progressData.loaded
         totalBytes.value = progressData.total
@@ -235,10 +244,13 @@ const downloadFile = async () => {
         }
       },
       downloadAbortController,
+      startByte,
+      chunks,
     )
 
-    if (isDownloading.value) {
+    if (isDownloading.value && !isPaused.value) {
       success('File downloaded successfully!')
+      resumeData.value = null
 
       // Reset progress after a delay
       setTimeout(() => {
@@ -252,28 +264,39 @@ const downloadFile = async () => {
       await checkFile()
     }
   } catch (err) {
-    if (err.message === 'Download cancelled') {
-      // Don't show error for user-initiated cancellation
+    if (err.message === 'Download cancelled' && err.resumeData) {
+      // Store resume data for later use
+      resumeData.value = err.resumeData
+      console.log('Download paused, resume data stored')
+    } else if (err.message === 'Download cancelled') {
       console.log('Download was cancelled by user')
     } else {
       showError('Download failed: ' + (err.message || 'Unknown error'))
     }
   } finally {
-    isDownloading.value = false
-    isPaused.value = false
-    downloadAbortController = null
+    if (!isPaused.value) {
+      isDownloading.value = false
+      downloadAbortController = null
+    }
   }
 }
 
 const pauseDownload = () => {
+  // Abort the current download to trigger resume data storage
+  if (downloadAbortController) {
+    downloadAbortController.abort()
+    downloadAbortController = null
+  }
+
   isPaused.value = true
   downloadSpeed.value = 0
+  success('Download paused - click Resume to continue from where you left off')
 }
 
 const resumeDownload = () => {
+  // Resume the download from where it was paused
   isPaused.value = false
-  lastProgressTime = Date.now()
-  lastDownloadedBytes = downloadedBytes.value
+  downloadFile(true) // Pass true to indicate this is a resume
 }
 
 const stopDownload = () => {
@@ -289,6 +312,7 @@ const stopDownload = () => {
   downloadedBytes.value = 0
   totalBytes.value = 0
   downloadSpeed.value = 0
+  resumeData.value = null // Clear resume data
   showError('Download was cancelled')
 }
 

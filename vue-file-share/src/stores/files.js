@@ -143,6 +143,28 @@ export const useFilesStore = defineStore('files', () => {
     }
   }
 
+  const downloadFileWithProgressResumable = async (
+    token,
+    onProgress,
+    abortController = null,
+    startByte = 0,
+    chunks = [],
+  ) => {
+    try {
+      error.value = null
+      return await filesAPI.downloadWithProgressResumable(
+        token,
+        onProgress,
+        abortController,
+        startByte,
+        chunks,
+      )
+    } catch (err) {
+      error.value = err.message || 'Download failed'
+      throw err
+    }
+  }
+
   const getFileStatus = async (token) => {
     try {
       const response = await filesAPI.getFileStatus(token)
@@ -197,6 +219,7 @@ export const useFilesStore = defineStore('files', () => {
     fetchFiles,
     downloadFile,
     downloadFileWithProgress,
+    downloadFileWithProgressResumable,
     getFileStatus,
     getPublicFileStatus,
     copyDownloadLink,

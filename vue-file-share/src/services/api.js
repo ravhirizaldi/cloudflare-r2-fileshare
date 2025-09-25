@@ -175,6 +175,147 @@ export const filesAPI = {
     })
   },
 
+  // New resumable download function with Range request support
+  downloadWithProgressResumable: (
+    token,
+    onProgress,
+    abortController = null,
+    startByte = 0,
+    chunks = [],
+  ) => {
+    return new Promise((resolve, reject) => {
+      const apiToken = localStorage.getItem('token')
+
+      fetch(`${api.defaults.baseURL}/r/${token}`, {
+        method: 'GET',
+        headers: {
+          ...(apiToken && { Authorization: `Bearer ${apiToken}` }),
+          ...(startByte > 0 && { Range: `bytes=${startByte}-` }),
+        },
+        signal: abortController?.signal,
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`)
+          }
+
+          const reader = response.body?.getReader()
+          if (!reader) {
+            // Fallback for browsers without stream support
+            return response.blob().then((blob) => {
+              const allChunks = [...chunks]
+              allChunks.push(blob)
+              const finalBlob = new Blob(allChunks, { type: 'application/octet-stream' })
+
+              filesAPI._triggerAntiIDMDownload(
+                finalBlob,
+                response.headers.get('x-original-name') ||
+                  response.headers.get('x-file-name') ||
+                  'download',
+              )
+              resolve({
+                fileName:
+                  response.headers.get('x-original-name') ||
+                  response.headers.get('x-file-name') ||
+                  'download',
+                total: finalBlob.size,
+                loaded: finalBlob.size,
+                chunks: allChunks,
+              })
+            })
+          }
+
+          const contentLength =
+            response.headers.get('content-length') || response.headers.get('x-file-size')
+          const contentRange = response.headers.get('content-range')
+          const fileName =
+            response.headers.get('x-original-name') ||
+            response.headers.get('x-file-name') ||
+            'download'
+
+          let total = contentLength ? parseInt(contentLength, 10) : 0
+          let loaded = startByte
+
+          // Parse content-range header if present (e.g., "bytes 200-1023/1024")
+          if (contentRange) {
+            const matches = contentRange.match(/bytes \d+-\d+\/(\d+)/)
+            if (matches) {
+              total = parseInt(matches[1], 10)
+            }
+          }
+
+          const allChunks = [...chunks]
+
+          function pump() {
+            return reader
+              .read()
+              .then(({ done, value }) => {
+                // Check if aborted
+                if (abortController?.signal.aborted) {
+                  reader.cancel()
+                  throw new Error('Download cancelled')
+                }
+
+                if (done) {
+                  const finalBlob = new Blob(allChunks, { type: 'application/octet-stream' })
+                  filesAPI._triggerAntiIDMDownload(finalBlob, fileName)
+                  resolve({ fileName, total, loaded, chunks: allChunks })
+                  return
+                }
+
+                allChunks.push(value)
+                loaded += value.length
+
+                if (onProgress) {
+                  onProgress({
+                    loaded,
+                    total,
+                    progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
+                    chunks: allChunks,
+                  })
+                }
+
+                return pump()
+              })
+              .catch((error) => {
+                if (error.message === 'Download cancelled' || abortController?.signal.aborted) {
+                  reader.cancel()
+                  // Return current state for potential resume
+                  reject({
+                    message: 'Download cancelled',
+                    resumeData: {
+                      loaded,
+                      total,
+                      chunks: allChunks,
+                      fileName,
+                    },
+                  })
+                } else {
+                  reject(error)
+                }
+              })
+          }
+
+          return pump()
+        })
+        .catch((error) => {
+          if (error.name === 'AbortError') {
+            reject({
+              message: 'Download cancelled',
+              resumeData: {
+                loaded: startByte + chunks.reduce((sum, chunk) => sum + chunk.size, 0),
+                total: 0,
+                chunks,
+                fileName: 'download',
+              },
+            })
+          } else {
+            reject(error)
+          }
+        })
+    })
+  },
+
   // Special download method for executable files to avoid IDM
   _downloadExecutableViaFetch: (token, onProgress, abortController = null) => {
     return new Promise((resolve, reject) => {
