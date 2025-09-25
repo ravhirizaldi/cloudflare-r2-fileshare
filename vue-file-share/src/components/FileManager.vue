@@ -76,6 +76,19 @@
 
             <div class="flex items-center gap-2">
               <button
+                title="Download file"
+                :disabled="isFileExpired(file)"
+                class="p-2 rounded-lg transition"
+                :class="
+                  isFileExpired(file)
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50'
+                "
+                @click="!isFileExpired(file) && downloadFile(file.token, file.file)"
+              >
+                <ArrowDownTrayIcon class="h-4 w-4" />
+              </button>
+              <button
                 title="Copy download link"
                 :disabled="isFileExpired(file)"
                 class="p-2 rounded-lg transition"
@@ -245,6 +258,7 @@ import {
   ChartBarIcon,
   ExclamationTriangleIcon,
   XMarkIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -378,6 +392,12 @@ const copyDownloadLink = async (token, filename) => {
     console.error('Failed to copy to clipboard:', error)
     showToast('Failed to copy link to clipboard', 'error')
   }
+}
+
+const downloadFile = (token, filename) => {
+  const downloadUrl = `${window.location.origin}/r/${token}`
+  window.open(downloadUrl, '_blank')
+  showToast(`Opening download for ${filename}`, 'info')
 }
 
 const formatBytes = (bytes) => {
