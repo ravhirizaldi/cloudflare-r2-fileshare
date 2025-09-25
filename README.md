@@ -19,7 +19,7 @@ R2 File Share is a full-stack application that allows users to upload files and 
 
 ```
 r2-fileshare/
-├── file-gateway/           # Backend (Cloudflare Workers)
+├── worker-gateway/           # Backend (Cloudflare Workers)
 │   ├── src/
 │   │   ├── index.js        # Main worker entry point
 │   │   ├── routes/         # API route handlers
@@ -33,7 +33,7 @@ r2-fileshare/
 │   ├── wrangler.toml       # Cloudflare configuration
 │   └── package.json        # Backend dependencies
 │
-└── r2-temporary-share/     # Frontend (Vue 3)
+└── vue-file-share/     # Frontend (Vue 3)
     ├── src/
     │   ├── components/     # Reusable Vue components
     │   ├── views/          # Page components
@@ -388,8 +388,6 @@ Client:    Receives blob → data URL → downloads as program.exe
 
 ## 🌊 Streaming Downloads
 
-## 🌊 Streaming Downloads
-
 The platform provides advanced streaming download capabilities with real-time progress tracking and resume support.
 
 ### Features
@@ -450,3 +448,19 @@ This project is open source and available under the [MIT License](LICENSE).
 ## 🤝 Support
 
 For support and questions, please open an issue on the repository or contact the development team.
+
+## 📚 Documentation Links
+
+### Main Documentation
+- **[README.md](./README.md)** - This file, complete project overview
+- **[QUICKSTART.md](./QUICKSTART.md)** - Get started in 5 minutes
+- **[ENVIRONMENT.md](./ENVIRONMENT.md)** - Environment configuration guide
+- **[FEATURES.md](./FEATURES.md)** - Detailed feature documentation
+
+### Frontend Documentation
+- **[Vue Frontend README](./vue-file-share/README.md)** - Frontend-specific documentation
+- **[Performance Guide](./vue-file-share/PERFORMANCE.md)** - Performance optimizations and metrics
+- **[Deployment Guide](./vue-file-share/DEPLOYMENT.md)** - Production deployment instructions
+
+### Backend Documentation  
+- **[Worker Gateway README](./worker-gateway/README.md)** - Backend API documentation and implementation details
