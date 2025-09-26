@@ -6,7 +6,7 @@
         'relative flex flex-col items-center justify-center p-12 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-300',
         isDragOver
           ? 'border-blue-500 bg-blue-50/70 scale-[1.01] shadow-lg'
-          : 'border-gray-300 bg-white hover:bg-gray-50'
+          : 'border-gray-300 bg-white hover:bg-gray-50',
       ]"
       @click="openFileDialog"
       @drop="handleDrop"
@@ -59,7 +59,7 @@
               'px-3 py-1.5 text-sm rounded-full border transition',
               uploadOptions.expiryType === 'quick' && uploadOptions.quickExpiry === opt.value
                 ? 'bg-blue-600 text-white border-blue-600'
-                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50',
             ]"
             @click="setExpiry('quick', opt.value)"
           >
@@ -71,7 +71,7 @@
               'px-3 py-1.5 text-sm rounded-full border transition',
               uploadOptions.expiryType === 'never'
                 ? 'bg-green-600 text-white border-green-600'
-                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50',
             ]"
             @click="uploadOptions.expiryType = 'never'"
           >
@@ -160,20 +160,20 @@ const quickOptions = [
   { value: '1h', label: '1 hour' },
   { value: '1d', label: '1 day' },
   { value: '7d', label: '1 week' },
-  { value: '30d', label: '1 month' }
+  { value: '30d', label: '1 month' },
 ]
 
 const uploadOptions = ref({
   expiryType: 'quick',
   quickExpiry: '1h',
   customExpiry: null,
-  unlimited: false
+  unlimited: false,
 })
 
 const formatCustomExpiry = computed(() =>
   uploadOptions.value.customExpiry
     ? new Date(uploadOptions.value.customExpiry).toLocaleString()
-    : 'No date selected'
+    : 'No date selected',
 )
 
 const handleDrop = (e) => {
@@ -186,7 +186,17 @@ const handleFileSelect = (e) => {
   const files = Array.from(e.target.files)
   if (files.length > 0) selectFile(files[0])
 }
-const selectFile = (file) => (selectedFile.value = file)
+const selectFile = (file) => {
+  // Check file size limit (100MB = 100 * 1024 * 1024 bytes)
+  const maxFileSize = 100 * 1024 * 1024
+  if (file.size >= maxFileSize) {
+    error(
+      `File size too large! Maximum allowed size is 100MB. Your file is ${formatFileSize(file.size)}.`,
+    )
+    return
+  }
+  selectedFile.value = file
+}
 const clearFile = () => {
   selectedFile.value = null
   if (fileInput.value) fileInput.value.value = ''
