@@ -84,6 +84,32 @@ export function createRouter() {
 					return await handleFileStatus(req, env, token);
 				}
 
+				// Debug route for cron testing
+				if (path === '/debug/cleanup') {
+					if (req.method === 'POST') {
+						// Manually trigger cleanup for testing
+						const result = await cleanupExpiredFiles(env);
+						return jsonResponse({ message: 'Cleanup triggered manually', result });
+					} else {
+						// Get cleanup info
+						const { results } = await env.DB.prepare(
+							`SELECT id, filename, expires_at, created_at 
+							 FROM files 
+							 WHERE expires_at IS NOT NULL AND expires_at < ? AND is_deleted = 0
+							 LIMIT 10`
+						)
+							.bind(Date.now())
+							.all();
+
+						return jsonResponse({
+							message: 'Cleanup debug info',
+							currentTime: Date.now(),
+							expiredFiles: results,
+							cronSchedule: '0 * * * * (every hour at minute 0)',
+						});
+					}
+				}
+
 				// Default response
 				return jsonResponse({ message: 'File Gateway API is running' });
 			} catch (error) {
@@ -104,10 +130,12 @@ export default {
 			cron: event.cron,
 		});
 
-		ctx.waitUntil(async () => {
-			const result = await cleanupExpiredFiles(env);
-			console.log('Cleanup result:', result);
-		});
+		ctx.waitUntil(
+			(async () => {
+				const result = await cleanupExpiredFiles(env);
+				console.log('Cleanup result:', result);
+			})()
+		);
 	},
 
 	async fetch(req, env) {

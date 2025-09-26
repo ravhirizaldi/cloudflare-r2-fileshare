@@ -152,7 +152,7 @@ This guide explains how to set up environment variables for both the frontend (V
 
 - `.env` files with real credentials
 - `.dev.vars` files
-- `wrangler.toml` with real resource IDs
+- `wrangler.jsonc` with real resource IDs
 - Any files containing:
   - JWT secrets
   - Database IDs
@@ -163,7 +163,7 @@ This guide explains how to set up environment variables for both the frontend (V
 ### What Should Be Committed
 
 - `.env.example` files (with placeholder values)
-- `wrangler.toml.example` (with placeholder values)
+- `wrangler.jsonc.example` (with placeholder values)
 - Configuration code that reads from environment variables
 
 ## Development Workflow
