@@ -93,6 +93,38 @@ function formatDuration(milliseconds) {
 	return `${seconds} second${seconds > 1 ? 's' : ''}`;
 }
 
+// Helper function to validate uploaded files
+function validateUploadedFile(file, maxSize = 100 * 1024 * 1024) {
+	// Default 100MB max
+	const errors = [];
+
+	if (!file || !(file instanceof File)) {
+		errors.push('Invalid file object');
+		return errors;
+	}
+
+	if (!file.name || file.name.trim() === '') {
+		errors.push('File name is required');
+	}
+
+	if (file.size > maxSize) {
+		errors.push(`File size exceeds maximum allowed size of ${Math.floor(maxSize / 1024 / 1024)}MB`);
+	}
+
+	if (file.size === 0) {
+		errors.push('File cannot be empty');
+	}
+
+	// Check for potentially dangerous file extensions (optional additional security)
+	const dangerousExtensions = ['.bat', '.cmd', '.com', '.cpl', '.exe', '.scr', '.vbs', '.js', '.jar'];
+	const fileExt = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+
+	// Note: We're not blocking these, just flagging for logging purposes
+	const isDangerous = dangerousExtensions.includes(fileExt);
+
+	return { errors, isDangerous };
+}
+
 // ==== File Routes ====
 
 export async function handleUpload(req, env) {
@@ -110,8 +142,36 @@ export async function handleUpload(req, env) {
 
 	try {
 		const form = await req.formData();
-		const file = form.get('file');
-		if (!file) {
+		const url = new URL(req.url);
+		const unlimited = url.searchParams.get('unlimited') === 'true';
+		const expiryParam = url.searchParams.get('expiry');
+		const isBulkUpload = url.searchParams.get('bulk') === 'true';
+
+		// Get all files from the form data
+		const files = [];
+		const originalNames = [];
+
+		if (isBulkUpload) {
+			// Handle multiple files
+			for (const [key, value] of form.entries()) {
+				if (key.startsWith('file') && value instanceof File) {
+					files.push(value);
+				} else if (key.startsWith('originalName') && typeof value === 'string') {
+					originalNames.push(value);
+				}
+			}
+		} else {
+			// Handle single file (backward compatibility)
+			const file = form.get('file');
+			const originalName = form.get('originalName');
+
+			if (file) {
+				files.push(file);
+				originalNames.push(originalName || '');
+			}
+		}
+
+		if (files.length === 0) {
 			await logAuditEvent(env, {
 				userId: authUser.sub,
 				action: 'upload_file',
@@ -119,36 +179,12 @@ export async function handleUpload(req, env) {
 				ipAddress,
 				userAgent,
 				success: false,
-				errorMessage: 'No file provided',
+				errorMessage: 'No files provided',
 			});
-			return errorResponse('No file provided');
+			return errorResponse('No files provided');
 		}
 
-		// Check if this is a masked executable file
-		const originalName = form.get('originalName');
-		const actualFileName = originalName || file.name;
-
-		if (originalName) {
-			console.log(`🔒 Processing masked executable: "${file.name}" with original name: "${originalName}"`);
-		}
-
-		// Store the original name in metadata for later restoration
-		const displayName = originalName || file.name;
-
-		const url = new URL(req.url);
-		const unlimited = url.searchParams.get('unlimited') === 'true';
-		const expiryParam = url.searchParams.get('expiry');
-		const key = `${authUser.sub}/${Date.now()}_${file.name}`; // Keep the masked name for storage
-
-		await env.MY_BUCKET.put(key, file.stream(), {
-			httpMetadata: {
-				contentType: file.type,
-				// Store original name in custom metadata
-				...(originalName && { 'x-original-name': originalName }),
-			},
-		});
-
-		// Calculate expiry time
+		// Calculate expiry time (same for all files)
 		let expiresAt = null;
 		let expiryDescription = 'Never expires';
 
@@ -171,67 +207,195 @@ export async function handleUpload(req, env) {
 			}
 		}
 
-		const token = crypto.randomUUID();
-		const meta = {
-			key,
-			name: displayName, // Use the original name for display
-			mime: file.type,
-			expires: expiresAt,
-			downloads: 0,
-			maxDownloads: unlimited ? null : 5,
-			unlimitedDownloads: unlimited,
-			owner: authUser.sub,
-			originalName: originalName, // Store original name if different
-		};
+		const uploadResults = [];
+		const failedUploads = [];
+		let totalSize = 0;
 
-		await env.TOKENS.put(`tokens:${token}`, JSON.stringify(meta));
+		// Process each file
+		for (let i = 0; i < files.length; i++) {
+			const file = files[i];
+			const originalName = originalNames[i] || '';
 
-		// Insert ke D1 - store the display name with additional fields
-		await env.DB.prepare(
-			`INSERT INTO files (id, owner, filename, key, mime, unlimited, max_downloads, downloads, expires_at, created_at, file_size)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-		)
-			.bind(
-				token,
-				authUser.sub,
-				displayName, // Use display name in database
-				key,
-				file.type || 'application/octet-stream',
-				unlimited ? 1 : 0,
-				unlimited ? null : meta.maxDownloads,
-				0,
-				expiresAt,
-				Date.now(),
-				file.size || 0
-			)
-			.run();
+			try {
+				// Validate the file first
+				const validation = validateUploadedFile(file);
+				if (validation.errors.length > 0) {
+					failedUploads.push({
+						filename: originalName || file.name,
+						error: validation.errors.join(', '),
+					});
+					continue; // Skip this file and continue with the next one
+				}
 
-		// Log successful upload
-		await logAuditEvent(env, {
-			userId: authUser.sub,
-			action: 'upload_file',
-			resourceType: 'file',
-			resourceId: token,
-			ipAddress,
-			userAgent,
-			details: {
-				filename: displayName,
-				size: file.size,
-				mime: file.type,
+				// Check if this is a masked executable file
+				const actualFileName = originalName || file.name;
+
+				if (originalName) {
+					console.log(`🔒 Processing masked executable: "${file.name}" with original name: "${originalName}"`);
+				}
+
+				if (validation.isDangerous) {
+					console.log(`⚠️ Uploading potentially dangerous file: "${actualFileName}"`);
+				}
+
+				// Store the original name in metadata for later restoration
+				const displayName = originalName || file.name;
+				const key = `${authUser.sub}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${file.name}`; // Add random string to prevent collisions
+
+				await env.MY_BUCKET.put(key, file.stream(), {
+					httpMetadata: {
+						contentType: file.type,
+						// Store original name in custom metadata
+						...(originalName && { 'x-original-name': originalName }),
+					},
+				});
+
+				const token = crypto.randomUUID();
+				const meta = {
+					key,
+					name: displayName, // Use the original name for display
+					mime: file.type,
+					expires: expiresAt,
+					downloads: 0,
+					maxDownloads: unlimited ? null : 5,
+					unlimitedDownloads: unlimited,
+					owner: authUser.sub,
+					originalName: originalName, // Store original name if different
+				};
+
+				await env.TOKENS.put(`tokens:${token}`, JSON.stringify(meta));
+
+				// Insert into D1 - store the display name with additional fields
+				await env.DB.prepare(
+					`INSERT INTO files (id, owner, filename, key, mime, unlimited, max_downloads, downloads, expires_at, created_at, file_size)
+					VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+				)
+					.bind(
+						token,
+						authUser.sub,
+						displayName, // Use display name in database
+						key,
+						file.type || 'application/octet-stream',
+						unlimited ? 1 : 0,
+						unlimited ? null : meta.maxDownloads,
+						0,
+						expiresAt,
+						Date.now(),
+						file.size || 0
+					)
+					.run();
+
+				// Add to successful uploads
+				uploadResults.push({
+					filename: displayName,
+					token: token,
+					link: `${url.origin}/r/${token}`,
+					size: file.size || 0,
+					mime: file.type,
+				});
+
+				totalSize += file.size || 0;
+
+				// Log individual file upload
+				await logAuditEvent(env, {
+					userId: authUser.sub,
+					action: 'upload_file',
+					resourceType: 'file',
+					resourceId: token,
+					ipAddress,
+					userAgent,
+					details: {
+						filename: displayName,
+						size: file.size,
+						mime: file.type,
+						unlimited,
+						expires: expiresAt,
+						bulkUpload: isBulkUpload,
+						fileIndex: i + 1,
+						totalFiles: files.length,
+					},
+					success: true,
+				});
+			} catch (error) {
+				console.error(`Failed to upload file ${file.name}:`, error);
+				failedUploads.push({
+					filename: originalName || file.name,
+					error: error.message,
+				});
+
+				// Log failed upload
+				await logAuditEvent(env, {
+					userId: authUser.sub,
+					action: 'upload_file',
+					resourceType: 'file',
+					ipAddress,
+					userAgent,
+					details: {
+						filename: originalName || file.name,
+						size: file.size,
+						mime: file.type,
+						unlimited,
+						expires: expiresAt,
+						bulkUpload: isBulkUpload,
+						fileIndex: i + 1,
+						totalFiles: files.length,
+					},
+					success: false,
+					errorMessage: error.message,
+				});
+			}
+		}
+
+		// Log bulk upload summary if multiple files
+		if (files.length > 1) {
+			await logAuditEvent(env, {
+				userId: authUser.sub,
+				action: 'bulk_upload_files',
+				resourceType: 'file',
+				ipAddress,
+				userAgent,
+				details: {
+					totalFiles: files.length,
+					successCount: uploadResults.length,
+					failedCount: failedUploads.length,
+					totalSize,
+					unlimited,
+					expires: expiresAt,
+				},
+				success: uploadResults.length > 0,
+			});
+		}
+
+		// Return appropriate response based on upload type
+		if (isBulkUpload || files.length > 1) {
+			return jsonResponse({
+				message: `Uploaded ${uploadResults.length} of ${files.length} files`,
+				summary: {
+					total: files.length,
+					successful: uploadResults.length,
+					failed: failedUploads.length,
+					totalSize,
+				},
+				files: uploadResults,
+				failedFiles: failedUploads,
+				expiresIn: expiryDescription,
 				unlimited,
-				expires: expiresAt,
-			},
-			success: true,
-		});
-
-		return jsonResponse({
-			link: `${url.origin}/r/${token}`,
-			expiresIn: expiryDescription,
-			unlimited,
-			maxDownloads: unlimited ? '∞' : meta.maxDownloads,
-			remainingDownloads: unlimited ? '∞' : meta.maxDownloads,
-			expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
-		});
+				maxDownloads: unlimited ? '∞' : 5,
+				remainingDownloads: unlimited ? '∞' : 5,
+				expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+			});
+		} else {
+			// Single file response (backward compatibility)
+			const result = uploadResults[0];
+			return jsonResponse({
+				link: result.link,
+				expiresIn: expiryDescription,
+				unlimited,
+				maxDownloads: unlimited ? '∞' : 5,
+				remainingDownloads: unlimited ? '∞' : 5,
+				expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+			});
+		}
 	} catch (error) {
 		console.error('Upload error:', error);
 		await logAuditEvent(env, {
@@ -890,6 +1054,29 @@ export async function handleGeneratePreview(req, env, token) {
 		});
 		return errorResponse('Preview generation failed', 500);
 	}
+}
+
+export async function handleGetUploadLimits(req, env) {
+	if (req.method !== 'GET') {
+		return errorResponse('Method not allowed', 405);
+	}
+
+	const authUser = await requireAuth(req, env);
+	if (!authUser) {
+		return errorResponse('Unauthorized', 401);
+	}
+
+	// These could be made configurable via environment variables
+	const limits = {
+		maxFileSize: 100 * 1024 * 1024, // 100MB
+		maxFilesPerUpload: 10, // Maximum files in a single bulk upload
+		maxTotalSizePerUpload: 500 * 1024 * 1024, // 500MB total for bulk uploads
+		allowedMimeTypes: [], // Empty array means all types allowed
+		blockedExtensions: ['.exe', '.bat', '.cmd', '.com', '.cpl', '.scr', '.vbs'], // For display only
+		dangerousExtensions: ['.exe', '.bat', '.cmd', '.com', '.cpl', '.scr', '.vbs', '.js', '.jar'],
+	};
+
+	return jsonResponse(limits);
 }
 
 export async function handlePreview(req, env, token, previewToken) {

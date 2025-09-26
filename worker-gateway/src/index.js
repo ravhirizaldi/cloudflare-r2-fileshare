@@ -8,6 +8,7 @@ import {
 	handleBulkDelete,
 	handleGeneratePreview,
 	handlePreview,
+	handleGetUploadLimits,
 } from './routes/files.js';
 import { handleDeleteFile, handleFileStats, handleUserStats, handleAuditTrail, handleRestoreFile } from './routes/admin.js';
 import { cleanupExpiredFiles } from './helpers/cleanup.js';
@@ -42,6 +43,10 @@ export function createRouter() {
 
 				if (path === '/myfiles') {
 					return await handleMyFiles(req, env);
+				}
+
+				if (path === '/upload-limits') {
+					return await handleGetUploadLimits(req, env);
 				}
 
 				// Bulk delete route

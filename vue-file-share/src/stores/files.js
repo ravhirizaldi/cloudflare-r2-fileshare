@@ -85,6 +85,114 @@ export const useFilesStore = defineStore('files', () => {
     }
   }
 
+  const uploadMultipleFiles = async (
+    files,
+    options = { expiry: '1h', unlimited: false },
+    onFileProgress = null,
+  ) => {
+    try {
+      isUploading.value = true
+      uploadProgress.value = 0
+      error.value = null
+
+      // For multiple files, we'll upload them sequentially to show individual progress
+      const uploadResults = []
+      const failedFiles = []
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+
+        try {
+          // Notify which file is currently being uploaded
+          if (onFileProgress) {
+            onFileProgress({
+              currentFileIndex: i,
+              currentFileName: file.name,
+              totalFiles: files.length,
+            })
+          }
+
+          // Upload individual file
+          const formData = new FormData()
+          formData.append('file', file)
+
+          // If the file has an original name (for masked executables), include it
+          if (file.originalName) {
+            formData.append('originalName', file.originalName)
+          }
+
+          // Build query parameters
+          const params = {
+            unlimited: options.unlimited.toString(),
+          }
+
+          if (options.expiry && options.expiry !== 'never') {
+            params.expiry = options.expiry
+          }
+
+          const response = await filesAPI.upload(formData, {
+            params,
+            onUploadProgress: (progressEvent) => {
+              const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+              uploadProgress.value = progress
+            },
+          })
+
+          // Store successful upload result
+          uploadResults.push({
+            filename: file.name,
+            token: response.data.link ? response.data.link.split('/').pop() : `token_${i}`,
+            link: response.data.link,
+            size: file.size || 0,
+            mime: file.type,
+          })
+        } catch (fileError) {
+          // Store failed upload
+          failedFiles.push({
+            filename: file.name,
+            error: fileError.response?.data?.message || fileError.message,
+          })
+        }
+      }
+
+      // Refresh the files list after upload
+      await fetchFiles()
+
+      // Return results in the same format as the backend bulk API
+      return {
+        message: `Uploaded ${uploadResults.length} of ${files.length} files`,
+        summary: {
+          total: files.length,
+          successful: uploadResults.length,
+          failed: failedFiles.length,
+          totalSize: files.reduce((sum, f) => sum + (f.size || 0), 0),
+        },
+        files: uploadResults,
+        failedFiles: failedFiles,
+        expiresIn: options.expiry === 'never' ? 'Never expires' : options.expiry,
+        unlimited: options.unlimited,
+        maxDownloads: options.unlimited ? '∞' : 5,
+        remainingDownloads: options.unlimited ? '∞' : 5,
+      }
+    } catch (err) {
+      error.value = err.response?.data?.message || 'Bulk upload failed'
+      throw err
+    } finally {
+      isUploading.value = false
+      uploadProgress.value = 0
+    }
+  }
+
+  const getUploadLimits = async () => {
+    try {
+      const response = await filesAPI.getUploadLimits()
+      return response.data
+    } catch (err) {
+      error.value = err.response?.data?.message || 'Failed to get upload limits'
+      throw err
+    }
+  }
+
   const fetchFiles = async (page = 1) => {
     try {
       isLoading.value = true
@@ -216,6 +324,8 @@ export const useFilesStore = defineStore('files', () => {
     pagination,
     uploadFiles,
     uploadFile,
+    uploadMultipleFiles,
+    getUploadLimits,
     fetchFiles,
     downloadFile,
     downloadFileWithProgress,

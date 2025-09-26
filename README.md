@@ -29,11 +29,15 @@ It's pretty straightforward - just drag and drop your files, get a shareable lin
 ## ✨ What it does (the cool stuff)
 
 - **Drag & drop uploads** - No complicated forms, just drag your files and watch the magic happen
+- **Multiple file uploads** - Select or drop multiple files at once with individual progress tracking
 - **Smart download links** - Set expiration times and download limits because security matters
 - **Resume downloads** - Internet died halfway through? No problem, just continue where you left off
 - **Anti-bot protection** - Keeps those pesky download managers from hammering your files
 - **User accounts** - Sign up once, keep track of all your shared files
 - **Auto-cleanup** - Files expire and get deleted automatically, keeping things tidy
+- **File preview** - Preview images, videos, and audio files with secure token-based access
+- **Bulk management** - Delete multiple files at once with comprehensive audit logging
+- **Advanced security** - Executable file masking and comprehensive upload validation
 
 ## 🛠️ Built with (the nerdy stuff)
 
@@ -113,6 +117,28 @@ npm run dev
 
 That's it! Your file-sharing app should now be running locally. Head to `http://localhost:5173` and start uploading some files to test it out.
 
+## 🚀 Key Features in Action
+
+### Multiple File Uploads
+The app now supports uploading multiple files at once! Here's how it works:
+
+- **Drag & Drop Multiple Files**: Select multiple files or drag them all at once
+- **Individual Progress Tracking**: See the progress of each file as it uploads
+- **Smart Validation**: Automatic file size, type, and total size validation
+- **Upload Limits**: Configurable limits (default: 100MB per file, 10 files max, 500MB total)
+- **Duplicate Detection**: Automatically skips files that are already selected
+- **Partial Success Handling**: Some files can fail while others succeed
+
+### File Preview System
+- **Secure Previews**: Images, videos, and audio files can be previewed with temporary tokens
+- **Token-Based Security**: Preview tokens expire after 5 minutes for security
+- **One-Time Use**: Preview tokens are consumed after use to prevent abuse
+
+### Advanced Management
+- **Bulk Operations**: Select and delete multiple files at once
+- **Comprehensive Logging**: Every action is logged for security and debugging
+- **Auto-Cleanup**: Expired files are automatically archived and cleaned up
+
 ### First-time setup tips �
 
 - Make sure you have a Cloudflare account and Wrangler CLI set up
@@ -129,6 +155,9 @@ I know security can be boring, but here's why you can trust this thing with your
 - **Your files are yours** - You can only see and download files you uploaded
 - **Auto-cleanup** - Expired files get deleted automatically, no manual cleanup needed
 - **No tracking** - I don't collect any weird data about you or your files
+- **Upload validation** - File size limits, type checking, and comprehensive validation
+- **Audit logging** - Complete audit trail for all file operations and security events
+- **Preview security** - File previews use temporary, expiring tokens for secure access
 
 ## 🐛 Something broken? Need help?
 
@@ -141,15 +170,43 @@ Hey, stuff happens! If you run into issues:
 
 Found a bug or have an idea for a cool feature? Open an issue or send a pull request! I'm always happy to make this thing better.
 
+## 📚 API Documentation (for developers)
+
+If you want to integrate with the API or build your own frontend, here are the key endpoints:
+
+### Upload Endpoints
+- `POST /upload` - Single file upload
+- `POST /upload?bulk=true` - Multiple file upload with indexed form fields (`file0`, `file1`, etc.)
+- `GET /upload-limits` - Get current upload restrictions and limits
+
+### File Management
+- `GET /myfiles` - List user's uploaded files with pagination
+- `DELETE /files/bulk-delete` - Delete multiple files at once
+- `GET /status/{token}` - Get detailed file information (owner only)
+- `GET /public-status/{token}` - Get public file status for download pages
+
+### Preview System
+- `POST /generate-preview/{token}` - Generate a temporary preview token
+- `GET /preview/{token}/{previewToken}` - Access file preview with temporary token
+
+### Download & Access
+- `GET /r/{token}` - Download file (supports range requests for resume)
+- File downloads include anti-IDM headers and special handling for executables
+
 ## 🎯 What's next?
 
 I'm always tinkering with this project. Here are some things I'm thinking about adding:
 
-- File preview for images and documents
-- Bulk upload and download
-- File compression options
-- Custom branding options
+- ~~File preview for images and documents~~ ✅ **Done!** Secure preview with temporary tokens
+- ~~Bulk upload and download~~ ✅ **Done!** Multiple file uploads with individual progress tracking
+- ~~Bulk file management~~ ✅ **Done!** Delete multiple files at once
+- File compression options for large uploads
+- Custom branding options and themes
+- Admin dashboard with usage analytics
+- API rate limiting and abuse prevention
 - Mobile app (maybe?)
+- File sharing with password protection
+- Folder organization and bulk operations
 
 If any of these sound cool to you, or if you have other ideas, let me know!
 

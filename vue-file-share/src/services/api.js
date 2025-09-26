@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // Use environment variables for configuration
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8787'
-const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT) || 30000
+const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT) || 300000
 
 // Create axios instance with environment-based configuration
 const baseURL = import.meta.env.DEV
@@ -108,6 +108,7 @@ export const filesAPI = {
     })
   },
   getMyFiles: (page = 1, limit = 10) => api.get('/myfiles', { params: { page, limit } }),
+  getUploadLimits: () => api.get('/upload-limits'),
   bulkDelete: (
     fileTokens,
     permanent = true, // Default to permanent deletion
