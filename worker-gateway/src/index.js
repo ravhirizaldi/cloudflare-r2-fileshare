@@ -1,5 +1,14 @@
 import { handleRegister, handleLogin, handleProfile } from './routes/auth.js';
-import { handleUpload, handleDownload, handleMyFiles, handleFileStatus, handlePublicFileStatus, handleBulkDelete } from './routes/files.js';
+import {
+	handleUpload,
+	handleDownload,
+	handleMyFiles,
+	handleFileStatus,
+	handlePublicFileStatus,
+	handleBulkDelete,
+	handleGeneratePreview,
+	handlePreview,
+} from './routes/files.js';
 import { handleDeleteFile, handleFileStats, handleUserStats, handleAuditTrail, handleRestoreFile } from './routes/admin.js';
 import { cleanupExpiredFiles } from './helpers/cleanup.js';
 import { jsonResponse } from './helpers/auth.js';
@@ -82,6 +91,23 @@ export function createRouter() {
 				if (path.startsWith('/status/')) {
 					const token = path.split('/').pop();
 					return await handleFileStatus(req, env, token);
+				}
+
+				// Generate preview token route
+				if (path.startsWith('/generate-preview/')) {
+					const token = path.split('/').pop();
+					return await handleGeneratePreview(req, env, token);
+				}
+
+				// Preview route with hash verification
+				if (path.startsWith('/preview/')) {
+					const pathParts = path.split('/');
+					if (pathParts.length >= 4) {
+						const token = pathParts[2];
+						const previewToken = pathParts[3];
+						return await handlePreview(req, env, token, previewToken);
+					}
+					return jsonResponse({ error: 'Invalid preview URL format' }, 400);
 				}
 
 				// Debug route for cron testing

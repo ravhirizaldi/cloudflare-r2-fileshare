@@ -75,6 +75,22 @@
             </div>
 
             <div class="flex items-center gap-2">
+              <!-- Preview button for media files -->
+              <button
+                v-if="isPreviewable(file)"
+                title="Preview file"
+                :disabled="isFileExpired(file)"
+                class="p-2 rounded-lg transition"
+                :class="
+                  isFileExpired(file)
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50'
+                "
+                @click="!isFileExpired(file) && openPreview(file)"
+              >
+                <EyeIcon class="h-4 w-4" />
+              </button>
+
               <button
                 title="Download file"
                 :disabled="isFileExpired(file)"
@@ -82,7 +98,7 @@
                 :class="
                   isFileExpired(file)
                     ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-purple-600 hover:text-purple-800 hover:bg-purple-50'
+                    : 'text-green-600 hover:text-green-800 hover:bg-green-50'
                 "
                 @click="!isFileExpired(file) && downloadFile(file.token, file.file)"
               >
@@ -246,6 +262,16 @@
         </div>
       </div>
     </div>
+
+    <!-- Preview Modal -->
+    <PreviewModal
+      :show="showPreview"
+      :file-token="selectedFile?.token || ''"
+      :file-name="selectedFile?.file || ''"
+      :mime-type="selectedFile?.mime || ''"
+      @close="closePreview"
+      @download="handlePreviewDownload"
+    />
   </div>
 </template>
 
@@ -254,6 +280,7 @@ import { ref, computed, watch } from 'vue'
 import { useAuth } from '../stores/auth'
 import { useFilesStore } from '../stores/files'
 import { useToast } from '../composables/useToast'
+import PreviewModal from './PreviewModal.vue'
 import {
   TrashIcon,
   LinkIcon,
@@ -261,6 +288,7 @@ import {
   ExclamationTriangleIcon,
   XMarkIcon,
   ArrowDownTrayIcon,
+  EyeIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -279,6 +307,8 @@ const { showToast } = useToast()
 const selectedFiles = ref([])
 const showDeleteModal = ref(false)
 const showStatsModal = ref(false)
+const showPreview = ref(false)
+const selectedFile = ref(null)
 const filesToDelete = ref([])
 const deletingFiles = ref(false)
 const fileStats = ref(null)
@@ -435,5 +465,33 @@ const formatBytes = (bytes) => {
 const formatDate = (dateString) => {
   if (!dateString) return 'Unknown'
   return new Date(dateString).toLocaleString()
+}
+
+// Preview functionality
+const isPreviewable = (file) => {
+  if (!file.mime) return false
+  return (
+    file.mime.startsWith('image/') ||
+    file.mime.startsWith('video/') ||
+    file.mime.startsWith('audio/')
+  )
+}
+
+const openPreview = (file) => {
+  selectedFile.value = file
+  showPreview.value = true
+}
+
+const closePreview = () => {
+  showPreview.value = false
+  selectedFile.value = null
+}
+
+const handlePreviewDownload = async (token) => {
+  const file = props.files.find((f) => f.token === token)
+  if (file) {
+    downloadFile(token, file.file)
+    closePreview()
+  }
 }
 </script>

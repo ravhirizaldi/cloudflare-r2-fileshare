@@ -117,6 +117,10 @@ export const filesAPI = {
     }),
   download: (token) => api.get(`/r/${token}`, { responseType: 'blob' }),
 
+  // Preview API methods
+  generatePreview: (token) => api.post(`/generate-preview/${token}`),
+  getPreviewUrl: (token, previewToken) => `${baseURL}/preview/${token}/${previewToken}`,
+
   // Alternative download method using a hidden iframe (for very stubborn cases)
   _downloadViaIframe: (url, fileName) => {
     return new Promise((resolve) => {

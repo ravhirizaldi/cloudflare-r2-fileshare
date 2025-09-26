@@ -1,6 +1,39 @@
 import { requireAuth, jsonResponse, errorResponse } from '../helpers/auth.js';
 import { logAuditEvent, getClientIP, recordDownloadHistory, updateFileStats, archiveExpiredFile } from '../helpers/audit.js';
 
+// Helper function to generate preview token with hash
+async function generatePreviewToken(fileToken, timestamp = Date.now()) {
+	const data = `${fileToken}-${timestamp}`;
+	// Create a simple hash using built-in crypto
+	const encoder = new TextEncoder();
+	const dataArray = encoder.encode(data);
+	const hashBuffer = await crypto.subtle.digest('SHA-256', dataArray);
+	const hashArray = new Uint8Array(hashBuffer);
+	const hashHex = Array.from(hashArray)
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('');
+	return `${timestamp}-${hashHex.substring(0, 16)}`;
+}
+
+// Helper function to validate preview token
+async function validatePreviewToken(previewToken, fileToken) {
+	try {
+		const [timestamp, hash] = previewToken.split('-');
+		if (!timestamp || !hash) return false;
+
+		const expectedToken = await generatePreviewToken(fileToken, parseInt(timestamp));
+		return expectedToken === previewToken;
+	} catch {
+		return false;
+	}
+}
+
+// Helper function to check if file is previewable
+function isPreviewableFile(mime) {
+	if (!mime) return false;
+	return mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/');
+}
+
 // Helper function to parse duration strings (e.g., '1h', '30m', '1d', '1month')
 function parseDuration(duration) {
 	if (!duration) return 0;
@@ -766,5 +799,213 @@ export async function handleBulkDelete(req, env) {
 			errorMessage: error.message,
 		});
 		return errorResponse('Bulk deletion failed', 500);
+	}
+}
+
+export async function handleGeneratePreview(req, env, token) {
+	if (req.method !== 'POST') {
+		return errorResponse('Method not allowed', 405);
+	}
+
+	const authUser = await requireAuth(req, env);
+	if (!authUser) {
+		return errorResponse('Unauthorized', 401);
+	}
+
+	const ipAddress = getClientIP(req);
+	const userAgent = req.headers.get('User-Agent') || 'unknown';
+
+	try {
+		const meta = await env.TOKENS.get(`tokens:${token}`, 'json');
+		if (!meta) {
+			return errorResponse('File not found', 404);
+		}
+
+		// Check if file has expired
+		if (meta.expires && Date.now() > meta.expires) {
+			return errorResponse('File expired', 410);
+		}
+
+		// Check if file is previewable
+		if (!isPreviewableFile(meta.mime)) {
+			return errorResponse('File type not previewable', 400);
+		}
+
+		// Check if user is owner or if file allows previews
+		if (authUser.sub !== meta.owner) {
+			// You could add additional logic here for public preview permissions
+		}
+
+		// Generate preview token with 5-minute expiry
+		const previewToken = await generatePreviewToken(token);
+		const previewExpiry = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+		// Store preview token in KV with expiry
+		await env.TOKENS.put(
+			`preview:${token}:${previewToken}`,
+			JSON.stringify({
+				fileToken: token,
+				createdAt: Date.now(),
+				expiresAt: previewExpiry,
+				usedCount: 0,
+				maxUses: 1,
+				userId: authUser.sub,
+				ipAddress,
+			}),
+			{ expirationTtl: 300 }
+		); // 5 minutes TTL
+
+		await logAuditEvent(env, {
+			userId: authUser.sub,
+			action: 'generate_preview_token',
+			resourceType: 'file',
+			resourceId: token,
+			ipAddress,
+			userAgent,
+			details: {
+				filename: meta.name,
+				mime: meta.mime,
+				previewExpiry: new Date(previewExpiry).toISOString(),
+			},
+			success: true,
+		});
+
+		return jsonResponse({
+			previewToken,
+			expiresAt: new Date(previewExpiry).toISOString(),
+			expiresIn: '5 minutes',
+			previewUrl: `${new URL(req.url).origin}/preview/${token}/${previewToken}`,
+		});
+	} catch (error) {
+		console.error('Generate preview error:', error);
+		await logAuditEvent(env, {
+			userId: authUser.sub,
+			action: 'generate_preview_token',
+			resourceType: 'file',
+			resourceId: token,
+			ipAddress,
+			userAgent,
+			success: false,
+			errorMessage: error.message,
+		});
+		return errorResponse('Preview generation failed', 500);
+	}
+}
+
+export async function handlePreview(req, env, token, previewToken) {
+	const ipAddress = getClientIP(req);
+	const userAgent = req.headers.get('User-Agent') || 'unknown';
+
+	try {
+		// Validate preview token format and hash
+		const isValidToken = await validatePreviewToken(previewToken, token);
+		if (!isValidToken) {
+			return errorResponse('Invalid preview token', 403);
+		}
+
+		// Get preview session data
+		const previewKey = `preview:${token}:${previewToken}`;
+		const previewData = await env.TOKENS.get(previewKey, 'json');
+
+		if (!previewData) {
+			return errorResponse('Preview session not found or expired', 404);
+		}
+
+		// Check if preview session has expired
+		if (Date.now() > previewData.expiresAt) {
+			await env.TOKENS.delete(previewKey);
+			return errorResponse('Preview session expired', 410);
+		}
+
+		// Check if preview has been used up
+		if (previewData.usedCount >= previewData.maxUses) {
+			await env.TOKENS.delete(previewKey);
+			return errorResponse('Preview session exhausted', 410);
+		}
+
+		// Get file metadata
+		const meta = await env.TOKENS.get(`tokens:${token}`, 'json');
+		if (!meta) {
+			return errorResponse('File not found', 404);
+		}
+
+		// Check if file has expired
+		if (meta.expires && Date.now() > meta.expires) {
+			return errorResponse('File expired', 410);
+		}
+
+		// Check if file is previewable
+		if (!isPreviewableFile(meta.mime)) {
+			return errorResponse('File type not previewable', 400);
+		}
+
+		// Get file from storage
+		const obj = await env.MY_BUCKET.get(meta.key);
+		if (!obj) {
+			return errorResponse('File not found in storage', 404);
+		}
+
+		// Mark preview as used and update counter
+		previewData.usedCount++;
+		if (previewData.usedCount >= previewData.maxUses) {
+			// Delete the preview token after use
+			await env.TOKENS.delete(previewKey);
+		} else {
+			// Update usage count
+			await env.TOKENS.put(previewKey, JSON.stringify(previewData), {
+				expirationTtl: Math.max(1, Math.floor((previewData.expiresAt - Date.now()) / 1000)),
+			});
+		}
+
+		// Log preview access
+		await logAuditEvent(env, {
+			userId: previewData.userId,
+			action: 'preview_file',
+			resourceType: 'file',
+			resourceId: token,
+			ipAddress,
+			userAgent,
+			details: {
+				filename: meta.name,
+				mime: meta.mime,
+				previewToken: previewToken.substring(0, 8) + '...',
+				usedCount: previewData.usedCount,
+			},
+			success: true,
+		});
+
+		// Return file with preview headers
+		return new Response(obj.body, {
+			headers: {
+				'Content-Type': meta.mime || 'application/octet-stream',
+				'Content-Length': (meta.size || obj.size).toString(),
+				'X-File-Name': meta.name,
+				'X-Preview-Mode': 'true',
+				'X-Original-Name': meta.originalName || meta.name,
+				'Cache-Control': 'no-store, no-cache, must-revalidate, private, max-age=0',
+				Pragma: 'no-cache',
+				Expires: '0',
+				// Security headers
+				'X-Content-Type-Options': 'nosniff',
+				'X-Frame-Options': 'SAMEORIGIN',
+				'Referrer-Policy': 'strict-origin-when-cross-origin',
+				// CORS headers for preview access
+				'Access-Control-Allow-Origin': '*',
+				'Access-Control-Expose-Headers': 'Content-Length, X-File-Name, X-Original-Name, X-Preview-Mode',
+			},
+		});
+	} catch (error) {
+		console.error('Preview error:', error);
+		await logAuditEvent(env, {
+			userId: 'unknown',
+			action: 'preview_file',
+			resourceType: 'file',
+			resourceId: token,
+			ipAddress,
+			userAgent,
+			success: false,
+			errorMessage: error.message,
+		});
+		return errorResponse('Preview failed', 500);
 	}
 }
