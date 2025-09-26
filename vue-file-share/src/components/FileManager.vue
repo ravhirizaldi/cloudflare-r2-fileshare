@@ -7,15 +7,15 @@
       <div class="flex items-center gap-3">
         <button
           class="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg text-white bg-gradient-to-r from-red-500 to-pink-600 shadow hover:from-red-600 hover:to-pink-700 transition disabled:opacity-40"
-          :disabled="!selectedFiles.length"
+          :disabled="!validSelectedFiles.length"
           @click="confirmDelete"
         >
           <TrashIcon class="h-4 w-4" />
-          Delete ({{ selectedFiles.length }})
+          Delete ({{ validSelectedFiles.length }})
         </button>
       </div>
       <div class="text-sm text-gray-600">
-        {{ selectedFiles.length }} of {{ files.length }} files selected
+        {{ validSelectedFiles.length }} of {{ files.length }} files selected
       </div>
     </div>
 
@@ -156,6 +156,8 @@
           </button>
           <button
             class="w-full px-4 py-2 rounded-lg text-gray-700 bg-gray-100 hover:bg-gray-200 transition"
+            :disabled="deletingFiles"
+            :class="{ 'opacity-50 cursor-not-allowed': deletingFiles }"
             @click="cancelDelete"
           >
             Cancel
@@ -248,7 +250,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useAuth } from '../stores/auth'
 import { useFilesStore } from '../stores/files'
 import { useToast } from '../composables/useToast'
@@ -282,6 +284,24 @@ const deletingFiles = ref(false)
 const fileStats = ref(null)
 const loadingStats = ref(false)
 
+// Computed property to get valid selected files (files that still exist and are not expired)
+const validSelectedFiles = computed(() => {
+  const existingTokens = props.files.map((f) => f.token)
+  return selectedFiles.value.filter((token) => {
+    const file = props.files.find((f) => f.token === token)
+    return existingTokens.includes(token) && file && !isFileExpired(file)
+  })
+})
+
+// Watch for changes in files prop and update selectedFiles accordingly
+watch(
+  () => props.files,
+  (newFiles) => {
+    const existingTokens = newFiles.map((f) => f.token)
+    selectedFiles.value = selectedFiles.value.filter((token) => existingTokens.includes(token))
+  },
+)
+
 const toggleFileSelection = (fileToken) => {
   // Find the file to check if it's expired
   const file = props.files.find((f) => f.token === fileToken)
@@ -302,12 +322,8 @@ const isFileExpired = (file) => {
 }
 
 const confirmDelete = () => {
-  // Filter out expired files from selection
-  const nonExpiredFiles = selectedFiles.value.filter((token) => {
-    const file = props.files.find((f) => f.token === token)
-    return file && !isFileExpired(file)
-  })
-  filesToDelete.value = [...nonExpiredFiles]
+  // Use valid selected files for deletion
+  filesToDelete.value = [...validSelectedFiles.value]
   showDeleteModal.value = true
 }
 
@@ -319,6 +335,11 @@ const cancelDelete = () => {
 const deleteFile = (fileToken) => {
   filesToDelete.value = [fileToken]
   showDeleteModal.value = true
+  // Remove from selection if it was selected
+  const index = selectedFiles.value.indexOf(fileToken)
+  if (index > -1) {
+    selectedFiles.value.splice(index, 1)
+  }
 }
 
 const executeDelete = async () => {
@@ -332,7 +353,10 @@ const executeDelete = async () => {
 
     if (summary.deleted > 0) {
       showToast(`Successfully permanently deleted ${summary.deleted} file(s)`, 'success')
-      selectedFiles.value = []
+      // Clear selected files that were successfully deleted
+      selectedFiles.value = selectedFiles.value.filter(
+        (token) => !filesToDelete.value.includes(token),
+      )
       emit('refresh')
     }
 

@@ -227,20 +227,26 @@ const downloadFile = async (useResume = false) => {
     await filesStore.downloadFileWithProgressResumable(
       token,
       (progressData) => {
-        downloadProgress.value = progressData.progress
-        downloadedBytes.value = progressData.loaded
-        totalBytes.value = progressData.total
+        // Throttle UI updates to prevent excessive re-rendering
+        const shouldUpdate = !downloadFile.lastUpdate || Date.now() - downloadFile.lastUpdate > 100
 
-        // Calculate download speed
-        const currentTime = Date.now()
-        const timeDiff = currentTime - lastProgressTime
+        if (shouldUpdate) {
+          downloadFile.lastUpdate = Date.now()
+          downloadProgress.value = progressData.progress
+          downloadedBytes.value = progressData.loaded
+          totalBytes.value = progressData.total
 
-        if (timeDiff > 500) {
-          // Update speed every 500ms
-          const bytesDiff = progressData.loaded - lastDownloadedBytes
-          downloadSpeed.value = Math.round((bytesDiff / timeDiff) * 1000) // bytes per second
-          lastProgressTime = currentTime
-          lastDownloadedBytes = progressData.loaded
+          // Calculate download speed (throttled)
+          const currentTime = Date.now()
+          const timeDiff = currentTime - lastProgressTime
+
+          if (timeDiff > 1000) {
+            // Update speed every 1000ms instead of 500ms to reduce overhead
+            const bytesDiff = progressData.loaded - lastDownloadedBytes
+            downloadSpeed.value = Math.round((bytesDiff / timeDiff) * 1000) // bytes per second
+            lastProgressTime = currentTime
+            lastDownloadedBytes = progressData.loaded
+          }
         }
       },
       downloadAbortController,
@@ -252,16 +258,15 @@ const downloadFile = async (useResume = false) => {
       success('File downloaded successfully!')
       resumeData.value = null
 
-      // Reset progress after a delay
-      setTimeout(() => {
-        downloadProgress.value = 0
-        downloadedBytes.value = 0
-        totalBytes.value = 0
-        downloadSpeed.value = 0
-      }, 2000)
+      // Reset progress immediately to prevent UI lag
+      isDownloading.value = false
+      downloadProgress.value = 0
+      downloadedBytes.value = 0
+      totalBytes.value = 0
+      downloadSpeed.value = 0
 
-      // Refresh file status to update download count
-      await checkFile()
+      // Refresh file status to update download count (non-blocking)
+      checkFile().catch(console.error)
     }
   } catch (err) {
     if (err.message === 'Download cancelled' && err.resumeData) {
@@ -277,6 +282,11 @@ const downloadFile = async (useResume = false) => {
     if (!isPaused.value) {
       isDownloading.value = false
       downloadAbortController = null
+
+      // Clear resume data to free memory
+      if (!isPaused.value) {
+        resumeData.value = null
+      }
     }
   }
 }

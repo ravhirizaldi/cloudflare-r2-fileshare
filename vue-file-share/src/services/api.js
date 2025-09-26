@@ -266,13 +266,19 @@ export const filesAPI = {
                 allChunks.push(value)
                 loaded += value.length
 
-                if (onProgress) {
-                  onProgress({
-                    loaded,
-                    total,
-                    progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
-                    chunks: allChunks,
-                  })
+                // Throttle progress updates to reduce UI overhead
+                const now = Date.now()
+                if (!pump.lastProgressUpdate || now - pump.lastProgressUpdate > 100) {
+                  pump.lastProgressUpdate = now
+
+                  if (onProgress) {
+                    onProgress({
+                      loaded,
+                      total,
+                      progress: total > 0 ? Math.round((loaded / total) * 100) : 0,
+                      chunks: allChunks,
+                    })
+                  }
                 }
 
                 return pump()
@@ -433,95 +439,32 @@ export const filesAPI = {
     })
   },
 
-  // Anti-IDM download trigger - uses multiple techniques to avoid detection
+  // Anti-IDM download trigger - optimized for performance
   _triggerAntiIDMDownload: (blob, fileName) => {
-    // Method 1: Use a data URL approach with delayed execution
-    const reader = new FileReader()
-    reader.onload = () => {
-      const dataUrl = reader.result
+    // Optimized single-method approach to reduce memory usage and lag
+    const link = document.createElement('a')
 
-      // Create multiple download attempts using different techniques
-      const techniques = [
-        // Technique 1: Hidden link with delayed click
-        () => {
-          const link = document.createElement('a')
-          link.style.cssText = 'position:absolute;left:-9999px;visibility:hidden;opacity:0;'
-          link.href = dataUrl
-          link.download = fileName
-          link.target = '_blank'
+    // Create object URL (more memory efficient than data URL for large files)
+    const objectUrl = window.URL.createObjectURL(blob)
 
-          document.body.appendChild(link)
+    // Set up the download link
+    link.href = objectUrl
+    link.download = fileName
+    link.style.display = 'none'
 
-          // Use multiple timer delays to confuse IDM
-          setTimeout(
-            () => {
-              link.click()
-              setTimeout(() => {
-                document.body.removeChild(link)
-              }, 200)
-            },
-            Math.random() * 100 + 50,
-          )
-        },
+    // Add to DOM, trigger download, then clean up immediately
+    document.body.appendChild(link)
 
-        // Technique 2: Programmatic download via window.open (fallback)
-        () => {
-          setTimeout(
-            () => {
-              try {
-                const newWindow = window.open()
-                if (newWindow) {
-                  newWindow.document.write(`
-                  <html>
-                    <head><title>Download</title></head>
-                    <body>
-                      <script>
-                        const link = document.createElement('a');
-                        link.href = '${dataUrl}';
-                        link.download = '${fileName}';
-                        link.click();
-                        window.close();
-                      </script>
-                    </body>
-                  </html>
-                `)
-                  newWindow.document.close()
-                }
-              } catch (e) {
-                console.warn('Fallback download method failed:', e)
-              }
-            },
-            Math.random() * 200 + 100,
-          )
-        },
-      ]
+    // Use requestAnimationFrame to ensure DOM update before click
+    window.requestAnimationFrame(() => {
+      link.click()
 
-      // Try the first technique, fallback to second if needed
-      techniques[0]()
-
-      // If first method fails, try second method after a delay
-      setTimeout(() => {
-        if (document.querySelector(`a[download="${fileName}"]`)) {
-          // First method probably worked
-          return
-        }
-        techniques[1]()
-      }, 500)
-    }
-
-    reader.onerror = () => {
-      // Ultimate fallback: create object URL and trigger download normally
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = fileName
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      window.URL.revokeObjectURL(url)
-    }
-
-    reader.readAsDataURL(blob)
+      // Clean up immediately to prevent memory leaks
+      window.requestAnimationFrame(() => {
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(objectUrl)
+      })
+    })
   },
 
   // Normal download method for non-executable files
