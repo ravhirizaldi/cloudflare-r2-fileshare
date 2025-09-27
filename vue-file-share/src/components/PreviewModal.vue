@@ -19,12 +19,30 @@
 
     <!-- Modal panel -->
     <div
-      class="preview-modal relative w-full sm:max-w-4xl bg-white/80 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200 animate-fadeIn overflow-hidden"
+      :class="[
+        'preview-modal relative animate-fadeIn overflow-hidden',
+        isAudio
+          ? 'w-full h-full bg-gradient-to-br from-gray-900 via-purple-900 to-blue-900'
+          : 'w-full sm:max-w-4xl bg-white/80 backdrop-blur-md rounded-2xl shadow-2xl border border-gray-200',
+      ]"
     >
       <!-- Header -->
-      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-        <h3 id="modal-title" class="text-lg font-bold text-gray-900 flex items-center gap-2">
-          <DocumentIcon class="h-5 w-5 text-blue-600" />
+      <div
+        :class="[
+          'flex items-center justify-between px-6 py-4',
+          isAudio
+            ? 'border-b border-white/20 bg-black/20 backdrop-blur-sm'
+            : 'border-b border-gray-100',
+        ]"
+      >
+        <h3
+          id="modal-title"
+          :class="[
+            'text-lg font-bold flex items-center gap-2',
+            isAudio ? 'text-white' : 'text-gray-900',
+          ]"
+        >
+          <DocumentIcon :class="['h-5 w-5', isAudio ? 'text-blue-400' : 'text-blue-600']" />
           Preview: <span class="truncate max-w-xs">{{ fileName }}</span>
         </h3>
         <div class="flex items-center gap-2">
@@ -48,20 +66,29 @@
       </div>
 
       <!-- Content -->
-      <div class="px-6 py-6 bg-gray-50/50 max-h-[80vh] overflow-y-auto">
+      <div
+        :class="[
+          isAudio
+            ? 'flex flex-col h-[calc(100vh-80px)] p-6 overflow-hidden'
+            : 'px-6 py-6 bg-gray-50/50 max-h-[80vh] overflow-y-auto',
+        ]"
+      >
         <!-- Loading -->
         <div
           v-if="isLoading || isContentLoading"
           class="flex flex-col items-center justify-center h-64 space-y-4"
         >
           <div
-            class="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-600"
+            :class="[
+              'animate-spin rounded-full h-12 w-12 border-4',
+              isAudio ? 'border-white/20 border-t-blue-400' : 'border-gray-200 border-t-blue-600',
+            ]"
           ></div>
           <div class="text-center">
-            <h3 class="text-sm font-medium text-gray-900">
+            <h3 :class="['text-sm font-medium', isAudio ? 'text-white' : 'text-gray-900']">
               {{ isLoading ? 'Generating preview...' : 'Loading content...' }}
             </h3>
-            <p class="text-xs text-gray-500 mt-1">
+            <p :class="['text-xs mt-1', isAudio ? 'text-white/70' : 'text-gray-500']">
               {{
                 isLoading
                   ? 'Please wait while we prepare your file'
@@ -73,9 +100,15 @@
 
         <!-- Error -->
         <div v-else-if="error" class="flex flex-col items-center justify-center h-64 text-center">
-          <ExclamationTriangleIcon class="h-12 w-12 text-red-500 mb-3" />
-          <h3 class="text-base font-semibold text-gray-900">Preview failed</h3>
-          <p class="mt-1 text-sm text-gray-500">{{ error }}</p>
+          <ExclamationTriangleIcon
+            :class="['h-12 w-12 mb-3', isAudio ? 'text-red-400' : 'text-red-500']"
+          />
+          <h3 :class="['text-base font-semibold', isAudio ? 'text-white' : 'text-gray-900']">
+            Preview failed
+          </h3>
+          <p :class="['mt-1 text-sm', isAudio ? 'text-white/70' : 'text-gray-500']">
+            {{ error }}
+          </p>
           <button
             class="mt-4 px-4 py-2 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium shadow hover:from-blue-700 hover:to-purple-700 transition"
             @click="generatePreview"
@@ -156,59 +189,69 @@
           </div>
 
           <!-- Audio -->
-          <div
-            v-else-if="isAudio"
-            class="max-w-md mx-auto bg-white/70 backdrop-blur-md p-6 rounded-xl shadow-lg text-center relative"
-          >
-            <MusicalNoteIcon class="h-12 w-12 text-blue-500 mx-auto mb-3" />
-            <h4 class="text-base font-semibold text-gray-900 mb-3">{{ fileName }}</h4>
+          <div v-else-if="isAudio" class="flex flex-col h-full">
+            <!-- 3D Audio Visualizer -->
+            <Audio3D
+              :audio-element="audioElementRef"
+              :file-name="fileName"
+              :is-playing="isAudioPlaying"
+              :full-screen="true"
+              class="flex-1"
+            />
+
+            <!-- Hidden Audio Element for 3D Visualizer -->
             <audio
+              ref="audioElementRef"
               :src="previewUrl"
-              controls
               preload="metadata"
-              class="w-full"
-              style="
-                user-select: none;
-                -webkit-user-select: none;
-                -moz-user-select: none;
-                -ms-user-select: none;
-              "
+              class="hidden"
+              style="display: none"
               controlsList="nodownload"
-              @loadedmetadata="onPreviewLoad"
+              @loadedmetadata="onAudioLoadedMetadata"
               @error="onPreviewError"
               @loadstart="onLoadStart"
-              @canplay="onPreviewLoad"
+              @canplay="onAudioCanPlay"
+              @play="onAudioPlay"
+              @pause="onAudioPause"
               @contextmenu.prevent
               @dragstart.prevent
               @selectstart.prevent
             ></audio>
-            <!-- Invisible overlay to prevent right-click (positioned to not block audio controls) -->
-            <div
-              class="absolute inset-0 z-10 cursor-default pointer-events-none"
-              style="padding-bottom: 40px"
-              @contextmenu.prevent
-              @dragstart.prevent
-              @selectstart.prevent
-            ></div>
           </div>
 
           <!-- Unsupported -->
           <div v-else class="flex flex-col items-center justify-center py-12 text-center">
-            <DocumentIcon class="h-12 w-12 text-gray-400 mb-3" />
-            <h3 class="text-sm font-semibold text-gray-900">Preview not available</h3>
-            <p class="text-xs text-gray-500">This file type cannot be previewed</p>
+            <DocumentIcon
+              :class="['h-12 w-12 mb-3', isAudio ? 'text-white/40' : 'text-gray-400']"
+            />
+            <h3 :class="['text-sm font-semibold', isAudio ? 'text-white' : 'text-gray-900']">
+              Preview not available
+            </h3>
+            <p :class="['text-xs', isAudio ? 'text-white/70' : 'text-gray-500']">
+              This file type cannot be previewed
+            </p>
           </div>
 
           <!-- Loading overlay while content loads -->
           <div
             v-if="isContentLoading"
-            class="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center rounded-xl"
+            :class="[
+              'absolute inset-0 flex items-center justify-center rounded-xl',
+              isAudio ? 'bg-black/60 backdrop-blur-sm' : 'bg-white/80 backdrop-blur-sm',
+            ]"
           >
             <div class="flex flex-col items-center space-y-2">
               <div
-                class="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-blue-600"
+                :class="[
+                  'animate-spin rounded-full h-8 w-8 border-2',
+                  isAudio
+                    ? 'border-white/20 border-t-blue-400'
+                    : 'border-gray-200 border-t-blue-600',
+                ]"
               ></div>
-              <p class="text-sm text-gray-600">Loading content...</p>
+              <p :class="['text-sm', isAudio ? 'text-white' : 'text-gray-600']">
+                Loading content...
+              </p>
             </div>
           </div>
         </div>
@@ -221,12 +264,12 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { filesAPI } from '../services/api'
 import { useToast } from '../composables/useToast'
+import Audio3D from './Audio3D.vue'
 import {
   XMarkIcon,
   ArrowDownTrayIcon,
   ExclamationTriangleIcon,
   DocumentIcon,
-  MusicalNoteIcon,
 } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -259,6 +302,9 @@ const isContentLoading = ref(false)
 const error = ref(null)
 const previewUrl = ref(null)
 const loadingTimeout = ref(null)
+const audioElementRef = ref(null)
+const isAudioPlaying = ref(false)
+const isClosing = ref(false) // Flag to prevent error handling during cleanup
 
 // Computed properties for file type detection
 const isImage = computed(() => props.mimeType?.startsWith('image/'))
@@ -336,18 +382,41 @@ const onPreviewLoad = () => {
   error.value = null // Clear any previous errors
 }
 
+const onAudioLoadedMetadata = () => {
+  console.log('Audio metadata loaded for:', props.fileName)
+  onPreviewLoad()
+}
+
+const onAudioCanPlay = async () => {
+  console.log('Audio can play for:', props.fileName)
+  onPreviewLoad()
+
+  // Autoplay audio when it's ready
+  if (audioElementRef.value && isAudio.value) {
+    try {
+      await audioElementRef.value.play()
+      console.log('Audio autoplay started for:', props.fileName)
+    } catch (error) {
+      console.warn('Audio autoplay failed:', error)
+      // Autoplay might be blocked by browser policy, but that's okay
+    }
+  }
+}
+
 const onLoadStart = () => {
   console.log('Load start event for:', props.fileName)
 }
 
 const onPreviewError = (event) => {
-  console.error('Preview error event triggered for:', props.fileName, event)
+  // Don't handle errors if we're intentionally closing/cleaning up
+  if (isClosing.value) {
+    return
+  }
 
   // Clear timeout if preview failed
   if (loadingTimeout.value) {
     clearTimeout(loadingTimeout.value)
     loadingTimeout.value = null
-    console.log('Cleared loading timeout due to error')
   }
 
   isContentLoading.value = false
@@ -355,6 +424,14 @@ const onPreviewError = (event) => {
   error.value = errorMsg
   showError(errorMsg)
   console.error('Preview loading error:', event)
+}
+
+const onAudioPlay = () => {
+  isAudioPlaying.value = true
+}
+
+const onAudioPause = () => {
+  isAudioPlaying.value = false
 }
 
 const downloadFile = async () => {
@@ -370,17 +447,37 @@ const downloadFile = async () => {
 }
 
 const close = () => {
+  // Set flag to prevent error handling during cleanup
+  isClosing.value = true
+
   // Clear any existing timeout
   if (loadingTimeout.value) {
     clearTimeout(loadingTimeout.value)
     loadingTimeout.value = null
   }
 
+  // Stop and cleanup audio completely
+  if (audioElementRef.value && isAudio.value) {
+    audioElementRef.value.pause()
+    audioElementRef.value.currentTime = 0
+    // Remove the src to fully stop the audio
+    audioElementRef.value.src = ''
+    audioElementRef.value.load()
+    console.log('Audio stopped and cleaned up for:', props.fileName)
+  }
+
   previewUrl.value = null
   error.value = null
   isContentLoading.value = false
   isLoading.value = false
+  isAudioPlaying.value = false
+
   emit('close')
+
+  // Reset the flag after cleanup
+  setTimeout(() => {
+    isClosing.value = false
+  }, 100)
 }
 
 // Prevent common keyboard shortcuts for saving/downloading
@@ -418,10 +515,28 @@ watch(
       }
     } else if (!newValue) {
       // Clean up when modal is closed
+      // Set flag to prevent error handling during cleanup
+      isClosing.value = true
+
+      // Stop and cleanup audio completely
+      if (audioElementRef.value && isAudio.value) {
+        audioElementRef.value.pause()
+        audioElementRef.value.currentTime = 0
+        audioElementRef.value.src = ''
+        audioElementRef.value.load()
+        console.log('Audio stopped and cleaned up on modal close for:', props.fileName)
+      }
+
       previewUrl.value = null
       error.value = null
       isContentLoading.value = false
       isLoading.value = false
+      isAudioPlaying.value = false
+
+      // Reset the flag after cleanup
+      setTimeout(() => {
+        isClosing.value = false
+      }, 100)
     }
   },
 )
