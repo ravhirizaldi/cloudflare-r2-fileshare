@@ -200,15 +200,23 @@ export const filesAPI = {
     abortController = null,
     startByte = 0,
     chunks = [],
+    turnstileToken = null,
   ) => {
     return new Promise((resolve, reject) => {
       const apiToken = localStorage.getItem('token')
 
-      fetch(`${api.defaults.baseURL}/r/${token}`, {
+      // Build URL with turnstile token if provided
+      let downloadUrl = `${api.defaults.baseURL}/r/${token}`
+      if (turnstileToken) {
+        downloadUrl += `?turnstile=${encodeURIComponent(turnstileToken)}`
+      }
+
+      fetch(downloadUrl, {
         method: 'GET',
         headers: {
           ...(apiToken && { Authorization: `Bearer ${apiToken}` }),
           ...(startByte > 0 && { Range: `bytes=${startByte}-` }),
+          ...(turnstileToken && { 'X-Turnstile-Token': turnstileToken }),
         },
         signal: abortController?.signal,
       })

@@ -257,6 +257,7 @@ export const useFilesStore = defineStore('files', () => {
     abortController = null,
     startByte = 0,
     chunks = [],
+    turnstileToken = null,
   ) => {
     try {
       error.value = null
@@ -266,6 +267,7 @@ export const useFilesStore = defineStore('files', () => {
         abortController,
         startByte,
         chunks,
+        turnstileToken,
       )
     } catch (err) {
       error.value = err.message || 'Download failed'

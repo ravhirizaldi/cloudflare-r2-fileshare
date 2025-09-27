@@ -1,6 +1,6 @@
 <template>
   <div
-    class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 px-4"
+    class="min-h-screen flex items-start justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 px-4 pt-16 pb-28"
   >
     <div class="w-full max-w-lg space-y-8">
       <!-- Loading -->
@@ -49,66 +49,44 @@
             </div>
           </div>
 
-          <!-- Download Button / Controls -->
-          <div class="text-center">
-            <div v-if="!isDownloading">
-              <button
-                class="px-8 py-3 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-md hover:from-blue-700 hover:to-purple-700 transition flex items-center justify-center gap-2"
-                @click="downloadFile"
-              >
-                <ArrowDownTrayIcon class="h-5 w-5" />
-                Download
-              </button>
+          <!-- Turnstile -->
+          <div
+            v-show="!isDownloading && (!showDownloadButton || turnstileLoading)"
+            class="flex justify-center mb-4"
+          >
+            <div
+              ref="turnstileRef"
+              class="cf-turnstile"
+              :style="{ display: turnstileLoading ? 'none' : 'block' }"
+            ></div>
+
+            <div v-if="turnstileLoading" class="flex items-center justify-center h-16">
+              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <span class="ml-2 text-sm text-gray-600">Loading security verification...</span>
             </div>
 
-            <div v-else class="space-y-4">
-              <div class="flex justify-center gap-3">
-                <button
-                  v-if="!isPaused"
-                  class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 flex items-center gap-1"
-                  @click="pauseDownload"
-                >
-                  <PauseIcon class="h-4 w-4" /> Pause
-                </button>
-                <button
-                  v-else
-                  class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-1"
-                  @click="resumeDownload"
-                >
-                  <PlayIcon class="h-4 w-4" /> Resume
-                </button>
-                <button
-                  class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-1"
-                  @click="stopDownload"
-                >
-                  <StopIcon class="h-4 w-4" /> Stop
-                </button>
-              </div>
-              <p class="text-sm text-gray-600 text-center">
-                {{
-                  isPaused
-                    ? 'Download paused - Resume to continue from current position'
-                    : 'Downloading...'
-                }}
-              </p>
-            </div>
+            <!-- Show processing state after Turnstile completion -->
+            <div
+              v-if="turnstileCompleted && !showDownloadButton"
+              class="flex items-center justify-center h-16"
+            ></div>
+          </div>
+          <div
+            v-if="turnstileError && !isDownloading && !showDownloadButton"
+            class="text-red-600 text-sm text-center font-medium mb-4"
+          >
+            {{ turnstileError }}
           </div>
 
-          <!-- Progress -->
-          <div v-if="isDownloading" class="pt-4">
-            <div class="flex justify-between text-xs font-medium text-gray-500 mb-2">
-              <span>{{ formatFileSize(downloadedBytes) }} / {{ formatFileSize(totalBytes) }}</span>
-              <span v-if="!isPaused && downloadSpeed > 0"
-                >{{ formatFileSize(downloadSpeed) }}/s</span
-              >
-              <span v-if="isPaused" class="text-yellow-600 font-semibold">Paused</span>
-            </div>
-            <div class="h-3 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                class="h-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-500 ease-out"
-                :style="{ width: downloadProgress + '%' }"
-              ></div>
-            </div>
+          <!-- Download Button -->
+          <div v-if="!isDownloading && showDownloadButton && !turnstileLoading" class="text-center">
+            <button
+              class="px-8 py-3 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-md hover:from-blue-700 hover:to-purple-700 transition flex items-center justify-center gap-2"
+              @click="downloadFile"
+            >
+              <ArrowDownTrayIcon class="h-5 w-5" />
+              Download
+            </button>
           </div>
         </div>
 
@@ -138,14 +116,66 @@
         </button>
       </div>
     </div>
+
+    <!-- Sticky Footer -->
+    <footer
+      v-if="isDownloading"
+      class="fixed bottom-0 inset-x-0 bg-white/80 backdrop-blur-md border-t border-gray-200 shadow-lg p-4"
+    >
+      <div class="max-w-5xl mx-auto flex items-center">
+        <!-- Progress Area -->
+        <div class="flex-1 pr-6">
+          <div class="flex justify-between text-xs font-medium text-gray-500 mb-1">
+            <span>{{ formatFileSize(downloadedBytes) }} / {{ formatFileSize(totalBytes) }}</span>
+            <div class="flex gap-3">
+              <span v-if="!isPaused && downloadSpeed > 0">
+                {{ formatFileSize(downloadSpeed) }}/s
+              </span>
+              <span v-if="remainingBytes > 0"> {{ formatFileSize(remainingBytes) }} left </span>
+            </div>
+          </div>
+          <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              class="h-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-500 ease-out"
+              :style="{ width: downloadProgress + '%' }"
+            ></div>
+          </div>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="flex items-center gap-2">
+          <button
+            v-if="!isPaused"
+            class="px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 flex items-center gap-1 text-sm"
+            @click="pauseDownload"
+          >
+            <PauseIcon class="h-4 w-4" /> Pause
+          </button>
+          <button
+            v-else
+            class="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 flex items-center gap-1 text-sm"
+            @click="resumeDownload"
+          >
+            <PlayIcon class="h-4 w-4" /> Resume
+          </button>
+          <button
+            class="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 flex items-center gap-1 text-sm"
+            @click="stopDownload"
+          >
+            <StopIcon class="h-4 w-4" /> Stop
+          </button>
+        </div>
+      </div>
+    </footer>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useFilesStore } from '../stores/files'
 import { useToast } from '../composables/useToast'
+import { useTurnstile } from '../composables/useTurnstile'
 import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
@@ -163,6 +193,19 @@ const route = useRoute()
 const filesStore = useFilesStore()
 const { success, error: showError } = useToast()
 
+// Turnstile integration
+const {
+  turnstileRef,
+  isLoading: turnstileLoading,
+  error: turnstileError,
+  getToken,
+  isTokenValid,
+  resetTurnstile,
+} = useTurnstile()
+
+const showDownloadButton = ref(false)
+const turnstileCompleted = ref(false)
+
 const isLoading = ref(true)
 const isDownloading = ref(false)
 const isPaused = ref(false)
@@ -171,6 +214,7 @@ const error = ref('')
 const downloadProgress = ref(0)
 const downloadedBytes = ref(0)
 const totalBytes = ref(0)
+const remainingBytes = ref(0)
 const downloadSpeed = ref(0)
 const resumeData = ref(null) // Store resume data when paused
 
@@ -185,6 +229,25 @@ onMounted(() => {
   checkFile()
 })
 
+// Watch for Turnstile completion and add delay for better UX
+watch(
+  () => isTokenValid(),
+  (newValue) => {
+    if (newValue && !turnstileCompleted.value) {
+      turnstileCompleted.value = true
+      // Add a small delay to show the Turnstile success animation
+      setTimeout(() => {
+        showDownloadButton.value = true
+      }, 1500) // 1.5 second delay to see the animation
+    } else if (!newValue) {
+      // Reset states when token becomes invalid
+      turnstileCompleted.value = false
+      showDownloadButton.value = false
+    }
+  },
+  { immediate: true },
+)
+
 const checkFile = async () => {
   try {
     isLoading.value = true
@@ -198,6 +261,15 @@ const checkFile = async () => {
 }
 
 const downloadFile = async (useResume = false) => {
+  if (!isTokenValid()) {
+    showError('Please complete the security verification')
+    // Only reset if Turnstile is properly initialized
+    if (!turnstileLoading.value && turnstileRef.value) {
+      resetTurnstile()
+    }
+    return
+  }
+
   try {
     isDownloading.value = true
     if (!useResume) {
@@ -205,6 +277,7 @@ const downloadFile = async (useResume = false) => {
       downloadProgress.value = 0
       downloadedBytes.value = 0
       totalBytes.value = 0
+      remainingBytes.value = 0
       downloadSpeed.value = 0
       resumeData.value = null
     }
@@ -235,6 +308,7 @@ const downloadFile = async (useResume = false) => {
           downloadProgress.value = progressData.progress
           downloadedBytes.value = progressData.loaded
           totalBytes.value = progressData.total
+          remainingBytes.value = progressData.total - progressData.loaded
 
           // Calculate download speed (throttled)
           const currentTime = Date.now()
@@ -252,6 +326,7 @@ const downloadFile = async (useResume = false) => {
       downloadAbortController,
       startByte,
       chunks,
+      getToken(), // Add Turnstile token
     )
 
     if (isDownloading.value && !isPaused.value) {
@@ -263,6 +338,7 @@ const downloadFile = async (useResume = false) => {
       downloadProgress.value = 0
       downloadedBytes.value = 0
       totalBytes.value = 0
+      remainingBytes.value = 0
       downloadSpeed.value = 0
 
       // Refresh file status to update download count (non-blocking)
@@ -272,7 +348,6 @@ const downloadFile = async (useResume = false) => {
     if (err.message === 'Download cancelled' && err.resumeData) {
       // Store resume data for later use
       resumeData.value = err.resumeData
-      console.log('Download paused, resume data stored')
     } else if (err.message === 'Download cancelled') {
       console.log('Download was cancelled by user')
     } else {
@@ -321,6 +396,7 @@ const stopDownload = () => {
   downloadProgress.value = 0
   downloadedBytes.value = 0
   totalBytes.value = 0
+  remainingBytes.value = 0
   downloadSpeed.value = 0
   resumeData.value = null // Clear resume data
   showError('Download was cancelled')

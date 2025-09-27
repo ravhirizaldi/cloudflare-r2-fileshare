@@ -1,5 +1,6 @@
 import { requireAuth, jsonResponse, errorResponse, addCorsHeaders } from '../helpers/auth.js';
 import { logAuditEvent, getClientIP, recordDownloadHistory, updateFileStats, archiveExpiredFile } from '../helpers/audit.js';
+import { validateTurnstileToken, isTurnstileConfigured } from '../helpers/turnstile.js';
 
 // Helper function to generate preview token with hash
 async function generatePreviewToken(fileToken, timestamp = Date.now()) {
@@ -423,6 +424,35 @@ export async function handleDownload(req, env, token) {
 	const ipAddress = getClientIP(req);
 	const userAgent = req.headers.get('User-Agent') || 'unknown';
 	const downloadStartTime = Date.now();
+
+	// Validate Turnstile token if configured (for public downloads)
+	const turnstileConfigured = await isTurnstileConfigured(env);
+	if (turnstileConfigured) {
+		// Get Turnstile token from query parameters or headers
+		const url = new URL(req.url);
+		const turnstileToken = url.searchParams.get('turnstile') || req.headers.get('X-Turnstile-Token');
+
+		if (!turnstileToken) {
+			await recordDownloadHistory(env, {
+				fileId: token,
+				ipAddress,
+				userAgent,
+				success: false,
+			});
+			return errorResponse('Security verification required', 400, req);
+		}
+
+		const isValidTurnstile = await validateTurnstileToken(turnstileToken, env, ipAddress);
+		if (!isValidTurnstile) {
+			await recordDownloadHistory(env, {
+				fileId: token,
+				ipAddress,
+				userAgent,
+				success: false,
+			});
+			return errorResponse('Security verification failed', 403, req);
+		}
+	}
 
 	let meta = await env.TOKENS.get(`tokens:${token}`, 'json');
 	if (!meta) {
