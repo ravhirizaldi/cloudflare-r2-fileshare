@@ -77,7 +77,7 @@ This guide explains how to set up environment variables for both the frontend (V
 | Variable | Description | Default | Example |
 |----------|-------------|---------|---------|
 | `JWT_SECRET` | Secret key for JWT token signing | None | `your-super-secret-key-here` |
-| `CORS_ORIGIN` | Allowed CORS origin | None | `http://localhost:5173` |
+| `ALLOWED_ORIGINS` | Comma-separated allowed CORS origins | None | `https://yourdomain.com,https://your-other-domain.com` |
 | `MAX_FILE_SIZE` | Maximum file size in bytes | `104857600` | `104857600` |
 | `DEFAULT_EXPIRY_HOURS` | Default file expiry in hours | `24` | `24` |
 | `MAX_DOWNLOADS_DEFAULT` | Default maximum downloads | `10` | `10` |

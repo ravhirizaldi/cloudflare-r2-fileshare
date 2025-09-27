@@ -1110,7 +1110,7 @@ export async function handleGetUploadLimits(req, env) {
 		dangerousExtensions: ['.exe', '.bat', '.cmd', '.com', '.cpl', '.scr', '.vbs', '.js', '.jar'],
 	};
 
-	return jsonResponse(limits, 200, req);
+	return jsonResponse(limits, 200, req, env);
 }
 
 export async function handlePreview(req, env, token, previewToken) {
