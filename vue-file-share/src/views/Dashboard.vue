@@ -77,7 +77,6 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useFilesStore } from '../stores/files'
-import { useToast } from '../composables/useToast'
 import FileUpload from '../components/FileUpload.vue'
 import FileManager from '../components/FileManager.vue'
 import FileStats from '../components/FileStats.vue'
@@ -88,7 +87,6 @@ import { ChartBarIcon, ArrowRightOnRectangleIcon, ArrowPathIcon } from '@heroico
 const router = useRouter()
 const authStore = useAuthStore()
 const filesStore = useFilesStore()
-const { success } = useToast()
 
 const { user } = authStore
 
@@ -98,7 +96,6 @@ const recentActivityRef = ref(null)
 
 const handleLogout = () => {
   authStore.logout()
-  success('Logged out successfully')
   router.push('/')
 }
 

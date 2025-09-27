@@ -3,21 +3,37 @@
     <!-- Dropzone -->
     <div
       :class="[
-        'relative flex flex-col items-center justify-center p-12 rounded-2xl border-2 border-dashed cursor-pointer transition-all duration-300',
-        isDragOver
-          ? 'border-blue-500 bg-blue-50/70 scale-[1.01] shadow-lg'
-          : 'border-gray-300 bg-white hover:bg-gray-50',
+        'relative flex flex-col items-center justify-center p-12 rounded-2xl border-2 border-dashed transition-all duration-300',
+        isUploading
+          ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-50'
+          : isDragOver
+            ? 'border-blue-500 bg-blue-50/70 scale-[1.01] shadow-lg cursor-pointer'
+            : 'border-gray-300 bg-white hover:bg-gray-50 cursor-pointer',
       ]"
-      @click="openFileDialog"
-      @drop="handleDrop"
+      @click="!isUploading && openFileDialog()"
+      @drop="!isUploading && handleDrop($event)"
       @dragover.prevent
-      @dragenter.prevent="isDragOver = true"
+      @dragenter.prevent="!isUploading && (isDragOver = true)"
       @dragleave.prevent="isDragOver = false"
     >
       <ArrowUpTrayIcon class="h-12 w-12 text-blue-500 animate-bounce mb-4" />
-      <p class="text-lg font-semibold text-gray-800">Drop files here</p>
-      <p class="text-sm text-gray-500">or click to browse (multiple files supported)</p>
-      <input ref="fileInput" type="file" multiple class="hidden" @change="handleFileSelect" />
+      <p class="text-lg font-semibold text-gray-800">
+        {{ isUploading ? 'Upload in progress...' : 'Drop files here' }}
+      </p>
+      <div v-if="!isUploading" class="flex justify-center">
+        <p class="text-sm text-gray-500 text-center">
+          or click to browse <br />
+          (multiple files supported)
+        </p>
+      </div>
+      <input
+        ref="fileInput"
+        type="file"
+        multiple
+        :disabled="isUploading"
+        class="hidden"
+        @change="handleFileSelect"
+      />
     </div>
 
     <!-- Files Selected -->
@@ -30,7 +46,11 @@
             <span class="text-gray-500">- Total: {{ formatFileSize(totalSize) }}</span>
           </h3>
           <button
-            class="text-red-500 hover:text-red-700 transition flex items-center gap-1"
+            :disabled="isUploading"
+            :class="[
+              'text-red-500 hover:text-red-700 transition flex items-center gap-1',
+              isUploading ? 'opacity-50 cursor-not-allowed' : '',
+            ]"
             @click="clearAllFiles"
           >
             <XMarkIcon class="h-4 w-4" />
@@ -57,7 +77,11 @@
               </div>
             </div>
             <button
-              class="text-red-500 hover:text-red-700 transition flex items-center gap-1 flex-shrink-0 ml-3"
+              :disabled="isUploading"
+              :class="[
+                'text-red-500 hover:text-red-700 transition flex items-center gap-1 flex-shrink-0 ml-3',
+                isUploading ? 'opacity-50 cursor-not-allowed' : '',
+              ]"
               @click="removeFile(index)"
             >
               <XMarkIcon class="h-4 w-4" />
@@ -75,11 +99,13 @@
             v-for="opt in quickOptions"
             :key="opt.value"
             type="button"
+            :disabled="isUploading"
             :class="[
               'px-3 py-1.5 text-sm rounded-full border transition',
               uploadOptions.expiryType === 'quick' && uploadOptions.quickExpiry === opt.value
                 ? 'bg-blue-600 text-white border-blue-600'
                 : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50',
+              isUploading ? 'opacity-50 cursor-not-allowed' : '',
             ]"
             @click="setExpiry('quick', opt.value)"
           >
@@ -87,11 +113,13 @@
           </button>
           <button
             type="button"
+            :disabled="isUploading"
             :class="[
               'px-3 py-1.5 text-sm rounded-full border transition',
               uploadOptions.expiryType === 'never'
                 ? 'bg-green-600 text-white border-green-600'
                 : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50',
+              isUploading ? 'opacity-50 cursor-not-allowed' : '',
             ]"
             @click="uploadOptions.expiryType = 'never'"
           >
@@ -107,14 +135,25 @@
             :format="'yyyy-MM-dd HH:mm'"
             placeholder="Pick expiry date & time"
             class="w-full"
+            :disabled="isUploading"
           />
           <p class="text-xs text-gray-500 mt-1">Expires on: {{ formatCustomExpiry }}</p>
         </div>
       </div>
 
       <!-- Unlimited Downloads -->
-      <label class="inline-flex items-center gap-2 text-sm text-gray-700">
-        <input v-model="uploadOptions.unlimited" type="checkbox" class="rounded text-blue-600" />
+      <label
+        :class="[
+          'inline-flex items-center gap-2 text-sm text-gray-700',
+          isUploading ? 'opacity-50 cursor-not-allowed' : '',
+        ]"
+      >
+        <input
+          v-model="uploadOptions.unlimited"
+          type="checkbox"
+          class="rounded text-blue-600"
+          :disabled="isUploading"
+        />
         Unlimited downloads
       </label>
 

@@ -438,10 +438,9 @@ const copyDownloadLink = async (token, filename) => {
   }
 }
 
-const downloadFile = (token, filename) => {
+const downloadFile = (token) => {
   const downloadUrl = `${window.location.origin}/r/${token}`
   window.open(downloadUrl, '_blank')
-  showToast(`Opening download for ${filename}`, 'info')
 }
 
 const formatBytes = (bytes) => {
