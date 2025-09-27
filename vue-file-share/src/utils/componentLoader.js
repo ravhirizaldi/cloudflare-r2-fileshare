@@ -49,9 +49,25 @@ export function preloadComponent(loader) {
 /**
  * Creates a map of preloaded components for critical routes
  * @param {Object} routes - Object with route names and their loaders
- * @returns {Object} - Object with preloaded component promises
+ * @returns {Promise} - Promise that resolves when all components are loaded
  */
 export function preloadCriticalComponents(routes) {
+  const preloadPromises = Object.keys(routes).map((routeName) => {
+    return preloadComponent(routes[routeName]).catch((error) => {
+      console.warn(`Failed to preload component ${routeName}:`, error)
+      return null // Return null for failed loads so Promise.all doesn't fail
+    })
+  })
+
+  return Promise.all(preloadPromises)
+}
+
+/**
+ * Creates a map of preloaded component promises (original behavior)
+ * @param {Object} routes - Object with route names and their loaders
+ * @returns {Object} - Object with preloaded component promises
+ */
+export function preloadCriticalComponentsMap(routes) {
   const preloaded = {}
 
   Object.keys(routes).forEach((routeName) => {

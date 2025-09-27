@@ -37,15 +37,27 @@ onMounted(async () => {
 
   // Don't wait for preloading to complete, let it happen in background
   // This ensures the app is ready faster
-  preloadPromise.catch((error) => {
-    console.warn('Failed to preload some components:', error)
-  })
+  preloadPromise
+    .then((results) => {
+      const successCount = results.filter(Boolean).length
+      const totalCount = results.length
+      if (successCount < totalCount) {
+        console.info(`Preloaded ${successCount}/${totalCount} critical components`)
+      }
+    })
+    .catch((error) => {
+      console.warn('Failed to preload some components:', error)
+    })
 
-  // Prefetch likely-needed resources
+  // Prefetch likely-needed resources using idle callback
   requestIdleCallback(() => {
     // Prefetch other views that might be needed
-    import('./views/Login.vue').catch(() => {})
-    import('./components/FileManager.vue').catch(() => {})
+    Promise.all([
+      import('./views/Login.vue').catch(() => null),
+      import('./components/FileManager.vue').catch(() => null)
+    ]).then(() => {
+      console.debug('Additional components prefetched')
+    })
   })
 })
 </script>
