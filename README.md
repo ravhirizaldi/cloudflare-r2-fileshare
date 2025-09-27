@@ -33,6 +33,7 @@ It's pretty straightforward - just drag and drop your files, get a shareable lin
 - **Smart download links** - Set expiration times and download limits because security matters
 - **Resume downloads** - Internet died halfway through? No problem, just continue where you left off
 - **Anti-bot protection** - Keeps those pesky download managers from hammering your files
+- **Cloudflare Turnstile** - Bot protection for login, registration, and downloads
 - **User accounts** - Sign up once, keep track of all your shared files
 - **Auto-cleanup** - Files expire and get deleted automatically, keeping things tidy
 - **File preview** - Preview images, videos, and audio files with secure token-based access
@@ -110,10 +111,25 @@ npm install
 # Copy the environment file and update it with your worker URL
 cp .env.example .env
 # Edit .env and set VITE_API_BASE_URL to your deployed worker URL
+# Also add your Turnstile site key for bot protection
 
 # Fire it up and see it in action!
 npm run dev
 ```
+
+### Step 7: Optional - Set up Cloudflare Turnstile
+For bot protection on login, registration, and downloads:
+1. Get your Turnstile keys from [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Add site key to `.env`: `VITE_TURNSTILE_SITE_KEY=your-key`
+3. Store secret keys in KV:
+   ```bash
+   # Production key
+   wrangler kv:key put --namespace-id="your-kv-id" "TURNSTILE_SECRET_KEY" "your-secret"
+   # Development key (for testing with dummy tokens)
+   wrangler kv:key put --namespace-id="your-kv-id" "TURNSTILE_SECRET_KEY_DEV" "1x0000000000000000000000000000000000000000"
+   ```
+
+See [TURNSTILE.md](TURNSTILE.md) for detailed setup instructions.
 
 That's it! Your file-sharing app should now be running locally. Head to `http://localhost:5173` and start uploading some files to test it out.
 
