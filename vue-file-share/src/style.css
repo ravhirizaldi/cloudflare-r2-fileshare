@@ -44,3 +44,15 @@
 .toast-info-custom {
   @apply bg-gradient-to-r from-blue-500 to-blue-600 border-blue-400/30;
 }
+
+/* Cloudflare Turnstile widget styling */
+.cf-turnstile {
+  @apply mx-auto;
+}
+
+/* Dark mode support for Turnstile */
+@media (prefers-color-scheme: light) {
+  .cf-turnstile {
+    filter: invert(1) hue-rotate(180deg);
+  }
+}

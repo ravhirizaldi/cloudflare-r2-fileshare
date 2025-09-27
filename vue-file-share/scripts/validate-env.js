@@ -1,7 +1,5 @@
 #!/usr/bin/env node
 
-/* eslint-disable no-undef */
-
 /**
  * Environment Validation Script
  *
@@ -13,7 +11,7 @@ const path = require('path')
 const fs = require('fs')
 
 // Required environment variables for frontend
-const REQUIRED_FRONTEND_VARS = ['VITE_API_BASE_URL']
+const REQUIRED_FRONTEND_VARS = ['VITE_API_BASE_URL', 'VITE_TURNSTILE_SITE_KEY']
 
 // Optional environment variables with defaults
 const OPTIONAL_FRONTEND_VARS = {

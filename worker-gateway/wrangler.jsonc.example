@@ -24,7 +24,8 @@
 		{
 			"binding": "TOKENS",
 			"id": "your-kv-namespace-id",
-			"preview_id": "your-kv-namespace-id"
+			"preview_id": "your-kv-namespace-id",
+			"comment": "Stores file tokens, TURNSTILE_SECRET_KEY (prod), and TURNSTILE_SECRET_KEY_DEV (testing)"
 		}
 	],
 	"d1_databases": [
