@@ -581,6 +581,7 @@ export const filesAPI = {
   },
   getFileStatus: (token) => api.get(`/status/${token}`),
   getPublicFileStatus: (token) => api.get(`/public-status/${token}`),
+  getFileStats: (token) => api.get(`/stats/${token}`),
 }
 
 export default api

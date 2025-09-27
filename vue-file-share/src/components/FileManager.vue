@@ -277,8 +277,8 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useAuth } from '../stores/auth'
 import { useFilesStore } from '../stores/files'
+import { filesAPI } from '../services/api'
 import { useToast } from '../composables/useToast'
 import PreviewModal from './PreviewModal.vue'
 import {
@@ -300,7 +300,6 @@ const props = defineProps({
 
 const emit = defineEmits(['refresh'])
 
-const auth = useAuth()
 const filesStore = useFilesStore()
 const { showToast } = useToast()
 
@@ -418,17 +417,8 @@ const viewFileStats = async (fileToken) => {
   fileStats.value = null
 
   try {
-    const response = await fetch(`/api/stats/${fileToken}`, {
-      headers: {
-        Authorization: `Bearer ${auth.token}`,
-      },
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to load file statistics')
-    }
-
-    fileStats.value = await response.json()
+    const response = await filesAPI.getFileStats(fileToken)
+    fileStats.value = response.data
   } catch (error) {
     showToast(`Failed to load statistics: ${error.message}`, 'error')
     showStatsModal.value = false
