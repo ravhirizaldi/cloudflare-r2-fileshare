@@ -59,6 +59,17 @@
             </div>
           </div>
 
+          <!-- Turnstile -->
+          <div class="flex justify-center">
+            <div ref="turnstileRef" class="cf-turnstile"></div>
+            <div v-if="turnstileLoading" class="flex items-center justify-center h-16">
+              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+            </div>
+          </div>
+          <div v-if="turnstileError" class="text-red-600 text-sm text-center font-medium">
+            {{ turnstileError }}
+          </div>
+
           <!-- Error -->
           <div v-if="error" class="text-red-600 text-sm text-center font-medium">
             {{ error }}
@@ -68,7 +79,7 @@
           <div>
             <button
               type="submit"
-              :disabled="isLoading"
+              :disabled="isLoading || !isTokenValid"
               class="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition disabled:opacity-60"
             >
               <ArrowRightOnRectangleIcon v-if="!isLoading" class="h-5 w-5" />
@@ -86,11 +97,22 @@ import { reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useToast } from '../composables/useToast'
+import { useTurnstile } from '../composables/useTurnstile'
 import { ArrowRightOnRectangleIcon } from '@heroicons/vue/24/outline'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const { success, error: showError } = useToast()
+
+// Turnstile integration
+const {
+  turnstileRef,
+  isLoading: turnstileLoading,
+  error: turnstileError,
+  getToken,
+  isTokenValid,
+  resetTurnstile,
+} = useTurnstile()
 
 const form = reactive({
   username: '',
@@ -100,11 +122,20 @@ const form = reactive({
 const { isLoading, error } = authStore
 
 const handleLogin = async () => {
+  if (!isTokenValid()) {
+    showError('Please complete the security verification')
+    return
+  }
+
   try {
-    await authStore.login(form)
+    await authStore.login({
+      ...form,
+      turnstileToken: getToken(),
+    })
     success('Welcome back!')
     router.push('/dashboard')
   } catch (err) {
+    resetTurnstile()
     showError('Login failed: ' + (err.response?.data?.message || err.message))
   }
 }

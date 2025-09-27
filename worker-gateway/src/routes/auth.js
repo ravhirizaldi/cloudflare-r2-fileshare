@@ -1,6 +1,7 @@
 import { hashPassword, signJWT, verifyJWT } from '../helpers/crypto.js';
 import { jsonResponse, errorResponse, requireAuth } from '../helpers/auth.js';
 import { logAuditEvent, getClientIP } from '../helpers/audit.js';
+import { validateTurnstileToken, isTurnstileConfigured } from '../helpers/turnstile.js';
 
 // ==== Auth Routes ====
 
@@ -13,7 +14,7 @@ export async function handleRegister(req, env) {
 	const userAgent = req.headers.get('User-Agent') || 'unknown';
 
 	try {
-		const { username, password } = await req.json();
+		const { username, password, name, turnstileToken } = await req.json();
 		if (!username || !password) {
 			await logAuditEvent(env, {
 				action: 'register_user',
@@ -24,6 +25,35 @@ export async function handleRegister(req, env) {
 				errorMessage: 'Missing credentials',
 			});
 			return errorResponse('Missing credentials', 400, req);
+		}
+
+		// Validate Turnstile token if configured
+		const turnstileConfigured = await isTurnstileConfigured(env);
+		if (turnstileConfigured) {
+			if (!turnstileToken) {
+				await logAuditEvent(env, {
+					action: 'register_user',
+					resourceType: 'user',
+					ipAddress,
+					userAgent,
+					success: false,
+					errorMessage: 'Missing security verification',
+				});
+				return errorResponse('Security verification required', 400, req);
+			}
+
+			const isValidTurnstile = await validateTurnstileToken(turnstileToken, env, ipAddress);
+			if (!isValidTurnstile) {
+				await logAuditEvent(env, {
+					action: 'register_user',
+					resourceType: 'user',
+					ipAddress,
+					userAgent,
+					success: false,
+					errorMessage: 'Security verification failed',
+				});
+				return errorResponse('Security verification failed', 403, req);
+			}
 		}
 
 		// Check if user exists
@@ -46,7 +76,10 @@ export async function handleRegister(req, env) {
 			.bind(username, hash, 'user', Date.now())
 			.run();
 
+		const token = await signJWT({ sub: username, username, role: 'user' }, env.JWT_SECRET);
+
 		await logAuditEvent(env, {
+			userId: username,
 			action: 'register_user',
 			resourceType: 'user',
 			resourceId: username,
@@ -55,7 +88,19 @@ export async function handleRegister(req, env) {
 			success: true,
 		});
 
-		return jsonResponse({ message: 'User registered successfully' }, 200, req);
+		return jsonResponse(
+			{
+				message: 'User registered successfully',
+				token,
+				user: {
+					username,
+					name: name || username,
+					role: 'user',
+				},
+			},
+			200,
+			req
+		);
 	} catch (error) {
 		console.error('Registration error:', error);
 		await logAuditEvent(env, {
@@ -79,7 +124,39 @@ export async function handleLogin(req, env) {
 	const userAgent = req.headers.get('User-Agent') || 'unknown';
 
 	try {
-		const { username, password } = await req.json();
+		const { username, password, turnstileToken } = await req.json();
+
+		// Validate Turnstile token if configured
+		const turnstileConfigured = await isTurnstileConfigured(env);
+		if (turnstileConfigured) {
+			if (!turnstileToken) {
+				await logAuditEvent(env, {
+					action: 'login_user',
+					resourceType: 'user',
+					resourceId: username,
+					ipAddress,
+					userAgent,
+					success: false,
+					errorMessage: 'Missing security verification',
+				});
+				return errorResponse('Security verification required', 400, req);
+			}
+
+			const isValidTurnstile = await validateTurnstileToken(turnstileToken, env, ipAddress);
+			if (!isValidTurnstile) {
+				await logAuditEvent(env, {
+					action: 'login_user',
+					resourceType: 'user',
+					resourceId: username,
+					ipAddress,
+					userAgent,
+					success: false,
+					errorMessage: 'Security verification failed',
+				});
+				return errorResponse('Security verification failed', 403, req);
+			}
+		}
+
 		const { results } = await env.DB.prepare('SELECT username, password_hash, role FROM users WHERE username = ?').bind(username).all();
 
 		if (results.length === 0) {
@@ -111,12 +188,12 @@ export async function handleLogin(req, env) {
 		}
 
 		// Update last login time
-		await env.DB.prepare('UPDATE users SET last_login = ? WHERE username = ?').bind(Date.now(), username).run();
+		await env.DB.prepare('UPDATE users SET last_login = ? WHERE username = ?').bind(Date.now(), user.username).run();
 
-		const token = await signJWT({ sub: username, role: user.role }, env.JWT_SECRET);
+		const authToken = await signJWT({ sub: user.username, username: user.username, role: user.role }, env.JWT_SECRET);
 
 		await logAuditEvent(env, {
-			userId: username,
+			userId: user.username,
 			action: 'login_user',
 			resourceType: 'user',
 			resourceId: username,
@@ -125,7 +202,17 @@ export async function handleLogin(req, env) {
 			success: true,
 		});
 
-		return jsonResponse({ token }, 200, req);
+		return jsonResponse(
+			{
+				token: authToken,
+				user: {
+					username: user.username,
+					role: user.role,
+				},
+			},
+			200,
+			req
+		);
 	} catch (error) {
 		console.error('Login error:', error);
 		await logAuditEvent(env, {
