@@ -5,7 +5,9 @@
 class PerformanceMonitor {
   constructor() {
     this.metrics = new Map()
-    this.enabled = process.env.NODE_ENV === 'development'
+    // Enable basic monitoring in production for critical metrics
+    this.enabled = true
+    this.developmentMode = import.meta.env.DEV
   }
 
   // Start timing a component load
@@ -30,7 +32,13 @@ class PerformanceMonitor {
 
       // Log slow loading components (>1 second)
       if (metric.duration > 1000) {
-        console.warn(`Slow component load: ${componentName} took ${metric.duration.toFixed(2)}ms`)
+        // Only log warnings in development, use lightweight tracking in production
+        if (this.developmentMode) {
+          console.warn(`Slow component load: ${componentName} took ${metric.duration.toFixed(2)}ms`)
+        } else {
+          // In production, just track without verbose logging
+          console.info(`Component load: ${componentName} - ${metric.duration.toFixed(2)}ms`)
+        }
       }
     }
   }
@@ -52,7 +60,7 @@ class PerformanceMonitor {
 
   // Log performance report
   logReport() {
-    if (!this.enabled) return
+    if (!this.enabled || !this.developmentMode) return
 
     const metrics = this.getAllMetrics()
     const sortedComponents = Object.entries(metrics)

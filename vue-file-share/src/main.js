@@ -28,4 +28,10 @@ const toastOptions = {
 app.use(pinia)
 app.use(router)
 app.use(Toast, toastOptions)
+
+// Mount the app and signal it's ready
 app.mount('#app')
+
+// Signal that the app is ready to hide loading screen
+// eslint-disable-next-line no-undef
+window.dispatchEvent(new CustomEvent('app-ready'))

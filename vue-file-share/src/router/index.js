@@ -1,35 +1,35 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { withPerformanceTracking } from '../utils/performanceMonitor'
+import { createOptimizedAsyncComponent } from '../utils/asyncComponents'
 
 const routes = [
   {
     path: '/',
     name: 'Home',
-    component: withPerformanceTracking(() => import('../views/Home.vue'), 'Home'),
+    component: createOptimizedAsyncComponent(() => import('../views/Home.vue')),
   },
   {
     path: '/login',
     name: 'Login',
-    component: withPerformanceTracking(() => import('../views/Login.vue'), 'Login'),
+    component: createOptimizedAsyncComponent(() => import('../views/Login.vue')),
     meta: { requiresGuest: true },
   },
   {
     path: '/register',
     name: 'Register',
-    component: withPerformanceTracking(() => import('../views/Register.vue'), 'Register'),
+    component: createOptimizedAsyncComponent(() => import('../views/Register.vue')),
     meta: { requiresGuest: true },
   },
   {
     path: '/dashboard',
     name: 'Dashboard',
-    component: withPerformanceTracking(() => import('../views/Dashboard.vue'), 'Dashboard'),
+    component: createOptimizedAsyncComponent(() => import('../views/Dashboard.vue')),
     meta: { requiresAuth: true },
   },
   {
     path: '/r/:token',
     name: 'Download',
-    component: withPerformanceTracking(() => import('../views/Download.vue'), 'Download'),
+    component: createOptimizedAsyncComponent(() => import('../views/Download.vue')),
   },
 ]
 

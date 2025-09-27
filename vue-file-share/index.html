@@ -112,7 +112,16 @@
       .app-ready #app-loading {
         opacity: 0;
         pointer-events: none;
-        transition: opacity 0.5s ease-out;
+        transition: opacity 0.3s ease-out;
+      }
+
+      /* Optimize animations for performance */
+      .loading-spinner {
+        will-change: transform;
+      }
+
+      .loading-text {
+        will-change: opacity;
       }
     </style>
   </head>
@@ -209,17 +218,35 @@
 
     <!-- Hide loading screen when app mounts -->
     <script>
-      // Add app-ready class when Vue app is loaded
-      window.addEventListener('DOMContentLoaded', function () {
-        setTimeout(function () {
+      let appReady = false
+      let domReady = false
+      
+      function hideLoadingScreen() {
+        if (appReady && domReady) {
           document.body.classList.add('app-ready')
-        }, 1000) // Minimum loading time for better UX
+        }
+      }
+
+      // Mark DOM as ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () {
+          domReady = true
+          hideLoadingScreen()
+        })
+      } else {
+        domReady = true
+      }
+
+      // Listen for Vue app ready event
+      window.addEventListener('app-ready', function () {
+        appReady = true
+        hideLoadingScreen()
       })
 
-      // Fallback to hide loading screen after maximum time
+      // Fallback to hide loading screen after maximum time (reduced from 10s to 5s)
       setTimeout(function () {
         document.body.classList.add('app-ready')
-      }, 10000)
+      }, 5000)
     </script>
   </body>
 </html>
