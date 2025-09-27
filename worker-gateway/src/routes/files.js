@@ -1,4 +1,4 @@
-import { requireAuth, jsonResponse, errorResponse } from '../helpers/auth.js';
+import { requireAuth, jsonResponse, errorResponse, addCorsHeaders } from '../helpers/auth.js';
 import { logAuditEvent, getClientIP, recordDownloadHistory, updateFileStats, archiveExpiredFile } from '../helpers/audit.js';
 
 // Helper function to generate preview token with hash
@@ -563,7 +563,7 @@ export async function handleDownload(req, env, token) {
 					'Content-Disposition': `attachment; filename="${meta.name}"`,
 			  };
 
-		return new Response(rangeObj.body, {
+		const rangeResponse = new Response(rangeObj.body, {
 			status: 206,
 			headers: {
 				...rangeAntiIDMHeaders,
@@ -582,6 +582,9 @@ export async function handleDownload(req, env, token) {
 				Expires: '0',
 			},
 		});
+
+		// Add CORS headers to the range response
+		return addCorsHeaders(rangeResponse, req);
 	}
 
 	// Record full download
@@ -615,7 +618,7 @@ export async function handleDownload(req, env, token) {
 		  };
 
 	// Full file download
-	return new Response(obj.body, {
+	const response = new Response(obj.body, {
 		headers: {
 			...antiIDMHeaders,
 			'Content-Length': contentLength.toString(),
@@ -633,6 +636,9 @@ export async function handleDownload(req, env, token) {
 			Expires: '0',
 		},
 	});
+
+	// Add CORS headers to the response
+	return addCorsHeaders(response, req);
 }
 
 export async function handleMyFiles(req, env) {
