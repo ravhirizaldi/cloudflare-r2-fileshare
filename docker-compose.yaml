@@ -3,11 +3,14 @@ services:
     build:
       context: ./vue-file-share
       dockerfile: Dockerfile
+      args:
+        - VITE_APP_TITLE=R2 File Share
+        - VITE_API_BASE_URL=https://file-gateway.it-dev-635.workers.dev
+        - VITE_API_TIMEOUT=3000000
+        - VITE_MAX_FILE_SIZE=100000000
+        - VITE_ALLOWED_FILE_TYPES=*
     ports:
       - "3000:80"
-    environment:
-      - VITE_APP_TITLE=R2 File Share
-      - VITE_API_BASE_URL=https://file-gateway.it-dev-635.workers.dev
     volumes:
       # Optional: Mount nginx config for easy changes
       - ./vue-file-share/nginx.conf:/etc/nginx/conf.d/default.conf:ro
