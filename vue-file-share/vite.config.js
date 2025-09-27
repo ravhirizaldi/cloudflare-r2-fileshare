@@ -8,8 +8,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
-    // Use relative base for better compatibility with different hosting setups
-    base: './',
+    // Use absolute base path for production to ensure assets load correctly from any route
+    base: mode === 'production' ? '/' : './',
     plugins: [
       vue(),
       tailwindcss(),
