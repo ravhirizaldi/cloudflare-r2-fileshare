@@ -355,26 +355,30 @@ export async function handleUserStats(req, env) {
 			success: true,
 		});
 
-		return jsonResponse({
-			user: {
-				username: authUser.sub,
-				role: authUser.role,
+		return jsonResponse(
+			{
+				user: {
+					username: authUser.sub,
+					role: authUser.role,
+				},
+				stats: userFiles[0] || {},
+				recentActivity: recentActivity.map((a) => ({
+					action: a.action,
+					timestamp: a.timestamp,
+					resourceType: a.resource_type,
+					resourceId: a.resource_id,
+					success: a.success,
+				})),
+				expiredFiles: expiredHistory.map((f) => ({
+					filename: f.filename,
+					expiredAt: f.expired_at,
+					totalDownloads: f.total_downloads,
+					reason: f.expiry_reason,
+				})),
 			},
-			stats: userFiles[0] || {},
-			recentActivity: recentActivity.map((a) => ({
-				action: a.action,
-				timestamp: a.timestamp,
-				resourceType: a.resource_type,
-				resourceId: a.resource_id,
-				success: a.success,
-			})),
-			expiredFiles: expiredHistory.map((f) => ({
-				filename: f.filename,
-				expiredAt: f.expired_at,
-				totalDownloads: f.total_downloads,
-				reason: f.expiry_reason,
-			})),
-		});
+			200,
+			req
+		);
 	} catch (error) {
 		console.error('Get user stats error:', error);
 		return errorResponse('Internal server error', 500, req);

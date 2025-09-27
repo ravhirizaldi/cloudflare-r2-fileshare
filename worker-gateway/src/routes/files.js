@@ -368,22 +368,26 @@ export async function handleUpload(req, env) {
 
 		// Return appropriate response based on upload type
 		if (isBulkUpload || files.length > 1) {
-			return jsonResponse({
-				message: `Uploaded ${uploadResults.length} of ${files.length} files`,
-				summary: {
-					total: files.length,
-					successful: uploadResults.length,
-					failed: failedUploads.length,
-					totalSize,
+			return jsonResponse(
+				{
+					message: `Uploaded ${uploadResults.length} of ${files.length} files`,
+					summary: {
+						total: files.length,
+						successful: uploadResults.length,
+						failed: failedUploads.length,
+						totalSize,
+					},
+					files: uploadResults,
+					failedFiles: failedUploads,
+					expiresIn: expiryDescription,
+					unlimited,
+					maxDownloads: unlimited ? '∞' : 5,
+					remainingDownloads: unlimited ? '∞' : 5,
+					expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
 				},
-				files: uploadResults,
-				failedFiles: failedUploads,
-				expiresIn: expiryDescription,
-				unlimited,
-				maxDownloads: unlimited ? '∞' : 5,
-				remainingDownloads: unlimited ? '∞' : 5,
-				expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
-			});
+				200,
+				req
+			);
 		} else {
 			// Single file response (backward compatibility)
 			const result = uploadResults[0];
@@ -956,17 +960,21 @@ export async function handleBulkDelete(req, env) {
 			success: true,
 		});
 
-		return jsonResponse({
-			message: `Bulk permanent deletion completed`,
-			summary: {
-				total: fileTokens.length,
-				deleted: deletedFiles.length,
-				failed: failedFiles.length,
-				permanent: true, // Always permanent
+		return jsonResponse(
+			{
+				message: `Bulk permanent deletion completed`,
+				summary: {
+					total: fileTokens.length,
+					deleted: deletedFiles.length,
+					failed: failedFiles.length,
+					permanent: true, // Always permanent
+				},
+				deletedFiles,
+				failedFiles,
 			},
-			deletedFiles,
-			failedFiles,
-		});
+			200,
+			req
+		);
 	} catch (error) {
 		console.error('Bulk delete error:', error);
 		await logAuditEvent(env, {
@@ -1050,12 +1058,16 @@ export async function handleGeneratePreview(req, env, token) {
 			success: true,
 		});
 
-		return jsonResponse({
-			previewToken,
-			expiresAt: new Date(previewExpiry).toISOString(),
-			expiresIn: '5 minutes',
-			previewUrl: `${new URL(req.url).origin}/preview/${token}/${previewToken}`,
-		});
+		return jsonResponse(
+			{
+				previewToken,
+				expiresAt: new Date(previewExpiry).toISOString(),
+				expiresIn: '5 minutes',
+				previewUrl: `${new URL(req.url).origin}/preview/${token}/${previewToken}`,
+			},
+			200,
+			req
+		);
 	} catch (error) {
 		console.error('Generate preview error:', error);
 		await logAuditEvent(env, {

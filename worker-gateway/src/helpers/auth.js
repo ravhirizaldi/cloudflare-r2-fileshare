@@ -12,7 +12,7 @@ export async function requireAuth(req, env) {
 // ==== CORS Helpers ====
 
 const ALLOWED_ORIGINS = [
-	'https://your-domain.com', // replace with your actual domain
+	'https://r2.cajnet.id', // production domain
 	'http://localhost:5173', // for local development
 	'http://localhost:3000',
 	'http://127.0.0.1:5173',
