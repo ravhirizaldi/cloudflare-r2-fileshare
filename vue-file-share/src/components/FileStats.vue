@@ -25,16 +25,8 @@
       </button>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="flex flex-col items-center py-12">
-      <div
-        class="animate-spin rounded-full h-10 w-10 border-4 border-blue-200 border-t-blue-600"
-      ></div>
-      <p class="text-gray-600 mt-3">Loading statistics...</p>
-    </div>
-
     <!-- Error -->
-    <div v-else-if="error" class="text-center py-12">
+    <div v-if="error" class="text-center py-12">
       <p class="text-red-600 font-medium">{{ error }}</p>
       <button
         class="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
@@ -45,83 +37,125 @@
     </div>
 
     <!-- Stats -->
-    <div v-else-if="stats" class="grid grid-cols-2 md:grid-cols-4 gap-6">
+    <div v-else class="grid grid-cols-2 md:grid-cols-4 gap-6">
       <!-- Total Files -->
       <div
         class="flex flex-col items-center bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-6 shadow-sm transform hover:-translate-y-1 transition duration-200"
       >
-        <svg
-          class="w-8 h-8 text-blue-600 mb-2 animate-pulse"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M4 4v16c0 .55.45 1 1 1h14c.55 0 1-.45 1-1V8l-6-4H5c-.55 0-1 .45-1 1z"
-          />
-        </svg>
-        <h3 class="text-sm font-medium text-blue-800">Total Files</h3>
-        <p class="text-2xl font-extrabold text-blue-900 mt-1">{{ stats.total_files || 0 }}</p>
+        <template v-if="loading">
+          <div
+            class="h-8 w-8 mb-2 rounded-full border-4 border-blue-200 border-t-blue-600 animate-spin"
+          ></div>
+          <h3 class="text-sm font-medium text-blue-800">Total Files</h3>
+          <p class="text-2xl font-extrabold text-blue-900 mt-1">...</p>
+        </template>
+        <template v-else>
+          <svg
+            class="w-8 h-8 text-blue-600 mb-2 animate-pulse"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M4 4v16c0 .55.45 1 1 1h14c.55 0 1-.45 1-1V8l-6-4H5c-.55 0-1 .45-1 1z"
+            />
+          </svg>
+          <h3 class="text-sm font-medium text-blue-800">Total Files</h3>
+          <p class="text-2xl font-extrabold text-blue-900 mt-1">
+            {{ stats?.total_files || 0 }}
+          </p>
+        </template>
       </div>
 
       <!-- Downloads -->
       <div
         class="flex flex-col items-center bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-6 shadow-sm transform hover:-translate-y-1 transition duration-200"
       >
-        <svg
-          class="w-8 h-8 text-green-600 mb-2 animate-bounce"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v12H4zM4 16l8 4 8-4" />
-        </svg>
-        <h3 class="text-sm font-medium text-green-800">Total Downloads</h3>
-        <p class="text-2xl font-extrabold text-green-900 mt-1">{{ stats.total_downloads || 0 }}</p>
+        <template v-if="loading">
+          <div
+            class="h-8 w-8 mb-2 rounded-full border-4 border-green-200 border-t-green-600 animate-spin"
+          ></div>
+          <h3 class="text-sm font-medium text-green-800">Total Downloads</h3>
+          <p class="text-2xl font-extrabold text-green-900 mt-1">...</p>
+        </template>
+        <template v-else>
+          <svg
+            class="w-8 h-8 text-green-600 mb-2 animate-bounce"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v12H4zM4 16l8 4 8-4" />
+          </svg>
+          <h3 class="text-sm font-medium text-green-800">Total Downloads</h3>
+          <p class="text-2xl font-extrabold text-green-900 mt-1">
+            {{ stats?.total_downloads || 0 }}
+          </p>
+        </template>
       </div>
 
       <!-- Storage -->
       <div
         class="flex flex-col items-center bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-6 shadow-sm transform hover:-translate-y-1 transition duration-200"
       >
-        <svg
-          class="w-8 h-8 text-purple-600 mb-2 animate-spin-slow"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-        >
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M3 20h9M4 4h16v12H4z" />
-        </svg>
-        <h3 class="text-sm font-medium text-purple-800">Storage Used</h3>
-        <p class="text-2xl font-extrabold text-purple-900 mt-1">
-          {{ formatBytes(stats.total_bytes || 0) }}
-        </p>
+        <template v-if="loading">
+          <div
+            class="h-8 w-8 mb-2 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin"
+          ></div>
+          <h3 class="text-sm font-medium text-purple-800">Storage Used</h3>
+          <p class="text-2xl font-extrabold text-purple-900 mt-1">...</p>
+        </template>
+        <template v-else>
+          <svg
+            class="w-8 h-8 text-purple-600 mb-2 animate-spin-slow"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 20h9M3 20h9M4 4h16v12H4z" />
+          </svg>
+          <h3 class="text-sm font-medium text-purple-800">Storage Used</h3>
+          <p class="text-2xl font-extrabold text-purple-900 mt-1">
+            {{ formatBytes(stats?.total_bytes || 0) }}
+          </p>
+        </template>
       </div>
 
       <!-- Expired -->
       <div
         class="flex flex-col items-center bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-6 shadow-sm transform hover:-translate-y-1 transition duration-200"
       >
-        <svg
-          class="w-8 h-8 text-red-600 mb-2 animate-ping"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M12 9v2m0 4h.01M10.29 3.86l-7.1 12.27a1 1 0 00.86 1.49h14.2a1 1 0 00.86-1.49l-7.1-12.27a1 1 0 00-1.72 0z"
-          />
-        </svg>
-        <h3 class="text-sm font-medium text-red-800">Expired Files</h3>
-        <p class="text-2xl font-extrabold text-red-900 mt-1">{{ stats.expired_files || 0 }}</p>
+        <template v-if="loading">
+          <div
+            class="h-8 w-8 mb-2 rounded-full border-4 border-red-200 border-t-red-600 animate-spin"
+          ></div>
+          <h3 class="text-sm font-medium text-red-800">Expired Files</h3>
+          <p class="text-2xl font-extrabold text-red-900 mt-1">...</p>
+        </template>
+        <template v-else>
+          <svg
+            class="w-8 h-8 text-red-600 mb-2 animate-ping"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 9v2m0 4h.01M10.29 3.86l-7.1 12.27a1 1 0 00.86 1.49h14.2a1 1 0 00.86-1.49l-7.1-12.27a1 1 0 00-1.72 0z"
+            />
+          </svg>
+          <h3 class="text-sm font-medium text-red-800">Expired Files</h3>
+          <p class="text-2xl font-extrabold text-red-900 mt-1">
+            {{ stats?.expired_files || 0 }}
+          </p>
+        </template>
       </div>
     </div>
   </div>

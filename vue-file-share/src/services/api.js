@@ -216,7 +216,8 @@ export const filesAPI = {
         headers: {
           ...(apiToken && { Authorization: `Bearer ${apiToken}` }),
           ...(startByte > 0 && { Range: `bytes=${startByte}-` }),
-          ...(turnstileToken && { 'X-Turnstile-Token': turnstileToken }),
+          // Remove X-Turnstile-Token header to avoid CORS issues
+          // The token is already in the URL query parameter
         },
         signal: abortController?.signal,
       })

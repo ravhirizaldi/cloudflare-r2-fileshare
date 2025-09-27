@@ -1,91 +1,119 @@
 <template>
-  <div
-    class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 px-4 sm:px-6 lg:px-8"
-  >
-    <div class="max-w-md w-full space-y-8">
-      <!-- Logo or Icon -->
-      <div class="flex justify-center">
-        <div class="p-3 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl shadow-lg">
-          <ArrowRightOnRectangleIcon class="h-8 w-8 text-white" />
+  <div class="h-screen grid grid-cols-1 lg:grid-cols-12">
+    <!-- Left side (8/12) -->
+    <div class="hidden lg:block lg:col-span-8">
+      <img
+        src="https://placehold.co/1200x720?text=R2+File+Share&font=roboto"
+        alt="Illustration"
+        class="w-full h-full object-cover"
+      />
+    </div>
+
+    <!-- Right side (4/12) -->
+    <div
+      class="col-span-12 lg:col-span-4 h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 grid place-items-center"
+      :class="{ 'cursor-wait': isLoading }"
+    >
+      <div class="w-full max-w-sm space-y-6">
+        <!-- Heading -->
+        <div class="text-center">
+          <h2 class="text-xl font-extrabold text-gray-900">Welcome Back</h2>
+          <p class="mt-1 text-sm text-gray-600">
+            Don’t have an account?
+            <router-link
+              to="/register"
+              class="font-medium text-blue-600 hover:text-blue-500 transition"
+            >
+              Create one
+            </router-link>
+          </p>
         </div>
-      </div>
 
-      <!-- Heading -->
-      <div class="text-center">
-        <h2 class="mt-6 text-3xl font-extrabold text-gray-900 tracking-tight">Welcome Back</h2>
-        <p class="mt-2 text-sm text-gray-600">
-          Don’t have an account?
-          <router-link
-            to="/register"
-            class="font-medium text-blue-600 hover:text-blue-500 transition"
-          >
-            Create one
-          </router-link>
-        </p>
-      </div>
+        <!-- Form -->
+        <form
+          class="space-y-4"
+          :class="{ 'cursor-wait pointer-events-none': isLoading }"
+          @submit.prevent="handleLogin"
+        >
+          <div>
+            <label for="username" class="block text-xs font-medium text-gray-700">Username</label>
+            <input
+              id="username"
+              v-model="form.username"
+              type="text"
+              autocomplete="username"
+              required
+              :disabled="isLoading"
+              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed"
+              placeholder="Enter your username"
+            />
+          </div>
 
-      <!-- Form Card -->
-      <div
-        class="bg-white/70 backdrop-blur-lg shadow-xl rounded-xl p-8 space-y-6 border border-gray-100"
-      >
-        <form class="space-y-6" @submit.prevent="handleLogin">
-          <!-- Inputs -->
-          <div class="space-y-4">
-            <div>
-              <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-              <input
-                id="username"
-                v-model="form.username"
-                name="username"
-                type="text"
-                autocomplete="username"
-                required
-                class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="Enter your username"
-              />
-            </div>
-            <div>
-              <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-              <input
-                id="password"
-                v-model="form.password"
-                name="password"
-                type="password"
-                autocomplete="current-password"
-                required
-                class="mt-1 block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                placeholder="Enter your password"
-              />
-            </div>
+          <div>
+            <label for="password" class="block text-xs font-medium text-gray-700">Password</label>
+            <input
+              id="password"
+              v-model="form.password"
+              type="password"
+              autocomplete="current-password"
+              required
+              :disabled="isLoading"
+              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-500 disabled:cursor-not-allowed"
+              placeholder="Enter your password"
+            />
           </div>
 
           <!-- Turnstile -->
-          <div class="flex justify-center">
-            <div ref="turnstileRef" class="cf-turnstile"></div>
-            <div v-if="turnstileLoading" class="flex items-center justify-center h-16">
-              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            </div>
+          <div v-if="effectiveSiteKey" class="flex justify-center">
+            <VueTurnstile
+              v-model="turnstileToken"
+              :site-key="effectiveSiteKey"
+              theme="light"
+              size="flexible"
+            />
           </div>
-          <div v-if="turnstileError" class="text-red-600 text-sm text-center font-medium">
+          <div v-if="turnstileError" class="text-red-600 text-xs text-center font-medium">
             {{ turnstileError }}
           </div>
 
           <!-- Error -->
-          <div v-if="error" class="text-red-600 text-sm text-center font-medium">
+          <div v-if="error" class="text-red-600 text-xs text-center font-medium">
             {{ error }}
           </div>
 
           <!-- Submit -->
-          <div>
-            <button
-              type="submit"
-              :disabled="isLoading || !isTokenValid"
-              class="w-full flex justify-center items-center gap-2 py-3 px-4 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition disabled:opacity-60"
+          <button
+            type="submit"
+            :disabled="isLoading || (effectiveSiteKey && !turnstileToken)"
+            class="w-full flex justify-center items-center gap-2 py-2.5 px-4 rounded-md text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 transition disabled:opacity-60 disabled:cursor-not-allowed"
+            :class="{ 'cursor-wait': isLoading }"
+          >
+            <!-- Loading spinner -->
+            <svg
+              v-if="isLoading"
+              class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
             >
-              <ArrowRightOnRectangleIcon v-if="!isLoading" class="h-5 w-5" />
-              {{ isLoading ? 'Signing in...' : 'Sign In' }}
-            </button>
-          </div>
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            <!-- Login icon when not loading -->
+            <ArrowRightOnRectangleIcon v-if="!isLoading" class="h-4 w-4" />
+            {{ isLoading ? 'Signing in...' : 'Sign In' }}
+          </button>
         </form>
       </div>
     </div>
@@ -93,49 +121,49 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue'
+import { reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useToast } from '../composables/useToast'
 import { useTurnstile } from '../composables/useTurnstile'
 import { ArrowRightOnRectangleIcon } from '@heroicons/vue/24/outline'
+import VueTurnstile from 'vue-turnstile'
 
 const router = useRouter()
 const authStore = useAuthStore()
-const { success, error: showError } = useToast()
+const { error: showError } = useToast()
 
 // Turnstile integration
-const {
-  turnstileRef,
-  isLoading: turnstileLoading,
-  error: turnstileError,
-  getToken,
-  isTokenValid,
-  resetTurnstile,
-} = useTurnstile()
+const { turnstileToken, error: turnstileError, effectiveSiteKey } = useTurnstile()
 
 const form = reactive({
   username: '',
   password: '',
 })
 
-const { isLoading, error } = authStore
+// Use computed for proper reactivity
+const isLoading = computed(() => authStore.isLoading)
+const error = computed(() => authStore.error)
 
 const handleLogin = async () => {
-  if (!isTokenValid()) {
+  // Check if Turnstile token is required and present
+  if (effectiveSiteKey.value && !turnstileToken.value) {
     showError('Please complete the security verification')
     return
   }
 
   try {
+    // Start the login process
     await authStore.login({
       ...form,
-      turnstileToken: getToken(),
+      turnstileToken: turnstileToken.value || null,
     })
-    success('Welcome back!')
-    router.push('/dashboard')
+
+    // Small delay to ensure loading state is visible
+    await new Promise((resolve) => setTimeout(resolve, 200))
+
+    router.replace('/dashboard')
   } catch (err) {
-    resetTurnstile()
     showError('Login failed: ' + (err.response?.data?.message || err.message))
   }
 }

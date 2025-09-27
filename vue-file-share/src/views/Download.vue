@@ -49,44 +49,31 @@
             </div>
           </div>
 
-          <!-- Turnstile -->
-          <div
-            v-show="!isDownloading && (!showDownloadButton || turnstileLoading)"
-            class="flex justify-center mb-4"
-          >
-            <div
-              ref="turnstileRef"
-              class="cf-turnstile"
-              :style="{ display: turnstileLoading ? 'none' : 'block' }"
-            ></div>
-
-            <div v-if="turnstileLoading" class="flex items-center justify-center h-16">
-              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-              <span class="ml-2 text-sm text-gray-600">Loading security verification...</span>
+          <Transition name="fade" mode="out-in">
+            <div v-if="showTurnstile" key="turnstile" class="flex justify-center mb-4">
+              <VueTurnstile
+                v-model="turnstileToken"
+                :site-key="effectiveSiteKey"
+                theme="light"
+                size="flexible"
+              />
             </div>
 
-            <!-- Show processing state after Turnstile completion -->
-            <div
-              v-if="turnstileCompleted && !showDownloadButton"
-              class="flex items-center justify-center h-16"
-            ></div>
-          </div>
-          <div
-            v-if="turnstileError && !isDownloading && !showDownloadButton"
-            class="text-red-600 text-sm text-center font-medium mb-4"
-          >
-            {{ turnstileError }}
-          </div>
+            <div v-else key="download" class="text-center">
+              <button
+                v-if="!isDownloading"
+                class="px-8 py-3 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-md hover:from-blue-700 hover:to-purple-700 transition-all duration-300 flex items-center justify-center gap-2 transform hover:scale-105"
+                @click="downloadFile"
+              >
+                <ArrowDownTrayIcon class="h-5 w-5" />
+                Download
+              </button>
+            </div>
+          </Transition>
 
-          <!-- Download Button -->
-          <div v-if="!isDownloading && showDownloadButton && !turnstileLoading" class="text-center">
-            <button
-              class="px-8 py-3 w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl shadow-md hover:from-blue-700 hover:to-purple-700 transition flex items-center justify-center gap-2"
-              @click="downloadFile"
-            >
-              <ArrowDownTrayIcon class="h-5 w-5" />
-              Download
-            </button>
+          <!-- turnstile error -->
+          <div v-if="turnstileError" class="text-red-600 text-xs text-center font-medium">
+            {{ turnstileError }}
           </div>
         </div>
 
@@ -176,6 +163,7 @@ import { useRoute } from 'vue-router'
 import { useFilesStore } from '../stores/files'
 import { useToast } from '../composables/useToast'
 import { useTurnstile } from '../composables/useTurnstile'
+import VueTurnstile from 'vue-turnstile'
 import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
@@ -194,17 +182,11 @@ const filesStore = useFilesStore()
 const { success, error: showError } = useToast()
 
 // Turnstile integration
-const {
-  turnstileRef,
-  isLoading: turnstileLoading,
-  error: turnstileError,
-  getToken,
-  isTokenValid,
-  resetTurnstile,
-} = useTurnstile()
+const { turnstileToken, error: turnstileError, effectiveSiteKey } = useTurnstile()
 
 const showDownloadButton = ref(false)
-const turnstileCompleted = ref(false)
+const isButtonLoading = ref(false)
+const showTurnstile = ref(true)
 
 const isLoading = ref(true)
 const isDownloading = ref(false)
@@ -227,26 +209,32 @@ const token = route.params.token
 
 onMounted(() => {
   checkFile()
+
+  // If no Turnstile required, show download button with delay
+  if (!effectiveSiteKey.value) {
+    isButtonLoading.value = true
+    setTimeout(() => {
+      showDownloadButton.value = true
+      isButtonLoading.value = false
+    }, 800) // Slightly shorter delay when no Turnstile
+  }
 })
 
-// Watch for Turnstile completion and add delay for better UX
-watch(
-  () => isTokenValid(),
-  (newValue) => {
-    if (newValue && !turnstileCompleted.value) {
-      turnstileCompleted.value = true
-      // Add a small delay to show the Turnstile success animation
+watch(turnstileToken, (newToken) => {
+  if (newToken) {
+    // Step 1: keep widget for 1.5s
+    setTimeout(() => {
+      showTurnstile.value = false
+      isButtonLoading.value = true
+
+      // Step 2: show spinner for 1s
       setTimeout(() => {
+        isButtonLoading.value = false
         showDownloadButton.value = true
-      }, 1500) // 1.5 second delay to see the animation
-    } else if (!newValue) {
-      // Reset states when token becomes invalid
-      turnstileCompleted.value = false
-      showDownloadButton.value = false
-    }
-  },
-  { immediate: true },
-)
+      }, 1000)
+    }, 1500)
+  }
+})
 
 const checkFile = async () => {
   try {
@@ -261,12 +249,9 @@ const checkFile = async () => {
 }
 
 const downloadFile = async (useResume = false) => {
-  if (!isTokenValid()) {
+  // Check if Turnstile token is required and present
+  if (effectiveSiteKey.value && !turnstileToken.value) {
     showError('Please complete the security verification')
-    // Only reset if Turnstile is properly initialized
-    if (!turnstileLoading.value && turnstileRef.value) {
-      resetTurnstile()
-    }
     return
   }
 
@@ -326,7 +311,7 @@ const downloadFile = async (useResume = false) => {
       downloadAbortController,
       startByte,
       chunks,
-      getToken(), // Add Turnstile token
+      turnstileToken.value || null, // Add Turnstile token (null if not configured)
     )
 
     if (isDownloading.value && !isPaused.value) {
@@ -375,7 +360,6 @@ const pauseDownload = () => {
 
   isPaused.value = true
   downloadSpeed.value = 0
-  success('Download paused - click Resume to continue from where you left off')
 }
 
 const resumeDownload = () => {
@@ -414,3 +398,22 @@ const formatDate = (dateString) => {
   return new Date(dateString).toLocaleDateString()
 }
 </script>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+.fade-enter-to,
+.fade-leave-from {
+  opacity: 1;
+  transform: scale(1);
+}
+</style>

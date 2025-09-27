@@ -50,9 +50,5 @@
   @apply mx-auto;
 }
 
-/* Dark mode support for Turnstile */
-@media (prefers-color-scheme: light) {
-  .cf-turnstile {
-    filter: invert(1) hue-rotate(180deg);
-  }
-}
+/* Remove the problematic dark mode filter that can interfere with Turnstile */
+/* The filter invert was causing display issues and is not needed */
