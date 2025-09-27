@@ -129,12 +129,12 @@ function validateUploadedFile(file, maxSize = 100 * 1024 * 1024) {
 
 export async function handleUpload(req, env) {
 	if (req.method !== 'POST') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser) {
-		return errorResponse('Unauthorized', 401);
+		return errorResponse('Unauthorized', 401, req);
 	}
 
 	const ipAddress = getClientIP(req);
@@ -181,7 +181,7 @@ export async function handleUpload(req, env) {
 				success: false,
 				errorMessage: 'No files provided',
 			});
-			return errorResponse('No files provided');
+			return errorResponse('No files provided', 400, req);
 		}
 
 		// Calculate expiry time (same for all files)
@@ -387,14 +387,18 @@ export async function handleUpload(req, env) {
 		} else {
 			// Single file response (backward compatibility)
 			const result = uploadResults[0];
-			return jsonResponse({
-				link: result.link,
-				expiresIn: expiryDescription,
-				unlimited,
-				maxDownloads: unlimited ? '∞' : 5,
-				remainingDownloads: unlimited ? '∞' : 5,
-				expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
-			});
+			return jsonResponse(
+				{
+					link: result.link,
+					expiresIn: expiryDescription,
+					unlimited,
+					maxDownloads: unlimited ? '∞' : 5,
+					remainingDownloads: unlimited ? '∞' : 5,
+					expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+				},
+				200,
+				req
+			);
 		}
 	} catch (error) {
 		console.error('Upload error:', error);
@@ -407,7 +411,7 @@ export async function handleUpload(req, env) {
 			success: false,
 			errorMessage: error.message,
 		});
-		return errorResponse('Upload failed', 500);
+		return errorResponse('Upload failed', 500, req);
 	}
 }
 
@@ -425,7 +429,7 @@ export async function handleDownload(req, env, token) {
 			userAgent,
 			success: false,
 		});
-		return errorResponse('File not found', 404);
+		return errorResponse('File not found', 404, req);
 	}
 
 	// Check if file has expired (only if expires is not null)
@@ -454,7 +458,7 @@ export async function handleDownload(req, env, token) {
 			success: false,
 		});
 
-		return errorResponse('File expired', 410);
+		return errorResponse('File expired', 410, req);
 	}
 
 	if (!meta.unlimitedDownloads) {
@@ -483,7 +487,7 @@ export async function handleDownload(req, env, token) {
 				success: false,
 			});
 
-			return errorResponse('Download limit reached', 410);
+			return errorResponse('Download limit reached', 410, req);
 		}
 
 		meta.downloads++;
@@ -499,7 +503,7 @@ export async function handleDownload(req, env, token) {
 			userAgent,
 			success: false,
 		});
-		return errorResponse('File not found in storage', 404);
+		return errorResponse('File not found in storage', 404, req);
 	}
 
 	// Check if this is likely an executable file that needs special handling
@@ -529,7 +533,7 @@ export async function handleDownload(req, env, token) {
 		});
 
 		if (!rangeObj) {
-			return errorResponse('Range not satisfiable', 416);
+			return errorResponse('Range not satisfiable', 416, req);
 		}
 
 		// Record partial download
@@ -629,12 +633,12 @@ export async function handleDownload(req, env, token) {
 
 export async function handleMyFiles(req, env) {
 	if (req.method !== 'GET') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser) {
-		return errorResponse('Unauthorized', 401);
+		return errorResponse('Unauthorized', 401, req);
 	}
 
 	const ipAddress = getClientIP(req);
@@ -690,7 +694,7 @@ export async function handleMyFiles(req, env) {
 			success: true,
 		});
 
-		return jsonResponse({ files, page, limit });
+		return jsonResponse({ files, page, limit }, 200, req);
 	} catch (error) {
 		console.error('Get my files error:', error);
 		await logAuditEvent(env, {
@@ -703,30 +707,30 @@ export async function handleMyFiles(req, env) {
 			success: false,
 			errorMessage: error.message,
 		});
-		return errorResponse('Internal server error', 500);
+		return errorResponse('Internal server error', 500, req);
 	}
 }
 
 export async function handleFileStatus(req, env, token) {
 	if (req.method !== 'GET') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser) {
-		return errorResponse('Unauthorized', 401);
+		return errorResponse('Unauthorized', 401, req);
 	}
 
 	const metaRaw = await env.TOKENS.get(`tokens:${token}`);
 	if (!metaRaw) {
-		return errorResponse('File not found', 404);
+		return errorResponse('File not found', 404, req);
 	}
 
 	const meta = JSON.parse(metaRaw);
 
 	// Check if user is owner or admin
 	if (authUser.sub !== meta.owner && authUser.role !== 'admin') {
-		return errorResponse('Forbidden', 403);
+		return errorResponse('Forbidden', 403, req);
 	}
 
 	let expiresIn = 'never';
@@ -739,21 +743,25 @@ export async function handleFileStatus(req, env, token) {
 		}
 	}
 
-	return jsonResponse({
-		file: meta.name,
-		owner: meta.owner,
-		unlimited: meta.unlimitedDownloads,
-		remainingDownloads: meta.unlimitedDownloads ? '∞' : meta.maxDownloads - meta.downloads,
-		expiresIn,
-		expiresAt: meta.expires ? new Date(meta.expires).toISOString() : null,
-		name: meta.originalName || meta.name, // Include original/display name for client checks
-		mime: meta.mime,
-	});
+	return jsonResponse(
+		{
+			file: meta.name,
+			owner: meta.owner,
+			unlimited: meta.unlimitedDownloads,
+			remainingDownloads: meta.unlimitedDownloads ? '∞' : meta.maxDownloads - meta.downloads,
+			expiresIn,
+			expiresAt: meta.expires ? new Date(meta.expires).toISOString() : null,
+			name: meta.originalName || meta.name, // Include original/display name for client checks
+			mime: meta.mime,
+		},
+		200,
+		req
+	);
 }
 
 export async function handlePublicFileStatus(req, env, token) {
 	if (req.method !== 'GET') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const metaRaw = await env.TOKENS.get(`tokens:${token}`);
@@ -763,7 +771,8 @@ export async function handlePublicFileStatus(req, env, token) {
 				valid: false,
 				message: 'File not found',
 			},
-			404
+			404,
+			req
 		);
 	}
 
@@ -776,7 +785,8 @@ export async function handlePublicFileStatus(req, env, token) {
 				valid: false,
 				message: 'File has expired',
 			},
-			410
+			410,
+			req
 		);
 	}
 
@@ -787,7 +797,8 @@ export async function handlePublicFileStatus(req, env, token) {
 				valid: false,
 				message: 'Download limit reached',
 			},
-			410
+			410,
+			req
 		);
 	}
 
@@ -799,30 +810,35 @@ export async function handlePublicFileStatus(req, env, token) {
 				valid: false,
 				message: 'File not found in storage',
 			},
-			404
+			404,
+			req
 		);
 	}
 
-	return jsonResponse({
-		valid: true,
-		fileName: meta.name,
-		fileSize: obj.size || 0,
-		downloadCount: meta.downloads,
-		expiresAt: meta.expires ? new Date(meta.expires).toISOString() : null,
-		unlimited: meta.unlimitedDownloads,
-		remainingDownloads: meta.unlimitedDownloads ? '∞' : meta.maxDownloads - meta.downloads,
-		neverExpires: !meta.expires,
-	});
+	return jsonResponse(
+		{
+			valid: true,
+			fileName: meta.name,
+			fileSize: obj.size || 0,
+			downloadCount: meta.downloads,
+			expiresAt: meta.expires ? new Date(meta.expires).toISOString() : null,
+			unlimited: meta.unlimitedDownloads,
+			remainingDownloads: meta.unlimitedDownloads ? '∞' : meta.maxDownloads - meta.downloads,
+			neverExpires: !meta.expires,
+		},
+		200,
+		req
+	);
 }
 
 export async function handleBulkDelete(req, env) {
 	if (req.method !== 'DELETE') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser) {
-		return errorResponse('Unauthorized', 401);
+		return errorResponse('Unauthorized', 401, req);
 	}
 
 	const ipAddress = getClientIP(req);
@@ -841,7 +857,7 @@ export async function handleBulkDelete(req, env) {
 				success: false,
 				errorMessage: 'No file tokens provided',
 			});
-			return errorResponse('No file tokens provided', 400);
+			return errorResponse('No file tokens provided', 400, req);
 		}
 
 		const deletedFiles = [];
@@ -962,18 +978,18 @@ export async function handleBulkDelete(req, env) {
 			success: false,
 			errorMessage: error.message,
 		});
-		return errorResponse('Bulk deletion failed', 500);
+		return errorResponse('Bulk deletion failed', 500, req);
 	}
 }
 
 export async function handleGeneratePreview(req, env, token) {
 	if (req.method !== 'POST') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser) {
-		return errorResponse('Unauthorized', 401);
+		return errorResponse('Unauthorized', 401, req);
 	}
 
 	const ipAddress = getClientIP(req);
@@ -982,17 +998,17 @@ export async function handleGeneratePreview(req, env, token) {
 	try {
 		const meta = await env.TOKENS.get(`tokens:${token}`, 'json');
 		if (!meta) {
-			return errorResponse('File not found', 404);
+			return errorResponse('File not found', 404, req);
 		}
 
 		// Check if file has expired
 		if (meta.expires && Date.now() > meta.expires) {
-			return errorResponse('File expired', 410);
+			return errorResponse('File expired', 410, req);
 		}
 
 		// Check if file is previewable
 		if (!isPreviewableFile(meta.mime)) {
-			return errorResponse('File type not previewable', 400);
+			return errorResponse('File type not previewable', 400, req);
 		}
 
 		// Check if user is owner or if file allows previews
@@ -1052,18 +1068,18 @@ export async function handleGeneratePreview(req, env, token) {
 			success: false,
 			errorMessage: error.message,
 		});
-		return errorResponse('Preview generation failed', 500);
+		return errorResponse('Preview generation failed', 500, req);
 	}
 }
 
 export async function handleGetUploadLimits(req, env) {
 	if (req.method !== 'GET') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser) {
-		return errorResponse('Unauthorized', 401);
+		return errorResponse('Unauthorized', 401, req);
 	}
 
 	// These could be made configurable via environment variables
@@ -1076,7 +1092,7 @@ export async function handleGetUploadLimits(req, env) {
 		dangerousExtensions: ['.exe', '.bat', '.cmd', '.com', '.cpl', '.scr', '.vbs', '.js', '.jar'],
 	};
 
-	return jsonResponse(limits);
+	return jsonResponse(limits, 200, req);
 }
 
 export async function handlePreview(req, env, token, previewToken) {
@@ -1087,7 +1103,7 @@ export async function handlePreview(req, env, token, previewToken) {
 		// Validate preview token format and hash
 		const isValidToken = await validatePreviewToken(previewToken, token);
 		if (!isValidToken) {
-			return errorResponse('Invalid preview token', 403);
+			return errorResponse('Invalid preview token', 403, req);
 		}
 
 		// Get preview session data
@@ -1095,41 +1111,41 @@ export async function handlePreview(req, env, token, previewToken) {
 		const previewData = await env.TOKENS.get(previewKey, 'json');
 
 		if (!previewData) {
-			return errorResponse('Preview session not found or expired', 404);
+			return errorResponse('Preview session not found or expired', 404, req);
 		}
 
 		// Check if preview session has expired
 		if (Date.now() > previewData.expiresAt) {
 			await env.TOKENS.delete(previewKey);
-			return errorResponse('Preview session expired', 410);
+			return errorResponse('Preview session expired', 410, req);
 		}
 
 		// Check if preview has been used up
 		if (previewData.usedCount >= previewData.maxUses) {
 			await env.TOKENS.delete(previewKey);
-			return errorResponse('Preview session exhausted', 410);
+			return errorResponse('Preview session exhausted', 410, req);
 		}
 
 		// Get file metadata
 		const meta = await env.TOKENS.get(`tokens:${token}`, 'json');
 		if (!meta) {
-			return errorResponse('File not found', 404);
+			return errorResponse('File not found', 404, req);
 		}
 
 		// Check if file has expired
 		if (meta.expires && Date.now() > meta.expires) {
-			return errorResponse('File expired', 410);
+			return errorResponse('File expired', 410, req);
 		}
 
 		// Check if file is previewable
 		if (!isPreviewableFile(meta.mime)) {
-			return errorResponse('File type not previewable', 400);
+			return errorResponse('File type not previewable', 400, req);
 		}
 
 		// Get file from storage
 		const obj = await env.MY_BUCKET.get(meta.key);
 		if (!obj) {
-			return errorResponse('File not found in storage', 404);
+			return errorResponse('File not found in storage', 404, req);
 		}
 
 		// Mark preview as used and update counter
@@ -1193,6 +1209,6 @@ export async function handlePreview(req, env, token, previewToken) {
 			success: false,
 			errorMessage: error.message,
 		});
-		return errorResponse('Preview failed', 500);
+		return errorResponse('Preview failed', 500, req);
 	}
 }

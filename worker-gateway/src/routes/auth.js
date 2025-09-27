@@ -6,7 +6,7 @@ import { logAuditEvent, getClientIP } from '../helpers/audit.js';
 
 export async function handleRegister(req, env) {
 	if (req.method !== 'POST') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const ipAddress = getClientIP(req);
@@ -23,7 +23,7 @@ export async function handleRegister(req, env) {
 				success: false,
 				errorMessage: 'Missing credentials',
 			});
-			return errorResponse('Missing credentials');
+			return errorResponse('Missing credentials', 400, req);
 		}
 
 		// Check if user exists
@@ -38,7 +38,7 @@ export async function handleRegister(req, env) {
 				success: false,
 				errorMessage: 'User already exists',
 			});
-			return errorResponse('User already exists');
+			return errorResponse('User already exists', 400, req);
 		}
 
 		const hash = await hashPassword(password);
@@ -55,7 +55,7 @@ export async function handleRegister(req, env) {
 			success: true,
 		});
 
-		return jsonResponse({ message: 'User registered successfully' });
+		return jsonResponse({ message: 'User registered successfully' }, 200, req);
 	} catch (error) {
 		console.error('Registration error:', error);
 		await logAuditEvent(env, {
@@ -66,13 +66,13 @@ export async function handleRegister(req, env) {
 			success: false,
 			errorMessage: error.message,
 		});
-		return errorResponse('Registration failed', 500);
+		return errorResponse('Registration failed', 500, req);
 	}
 }
 
 export async function handleLogin(req, env) {
 	if (req.method !== 'POST') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const ipAddress = getClientIP(req);
@@ -92,7 +92,7 @@ export async function handleLogin(req, env) {
 				success: false,
 				errorMessage: 'User not found',
 			});
-			return errorResponse('Invalid credentials', 401);
+			return errorResponse('Invalid credentials', 401, req);
 		}
 		const user = results[0];
 
@@ -107,7 +107,7 @@ export async function handleLogin(req, env) {
 				success: false,
 				errorMessage: 'Invalid password',
 			});
-			return errorResponse('Invalid credentials', 401);
+			return errorResponse('Invalid credentials', 401, req);
 		}
 
 		// Update last login time
@@ -125,7 +125,7 @@ export async function handleLogin(req, env) {
 			success: true,
 		});
 
-		return jsonResponse({ token });
+		return jsonResponse({ token }, 200, req);
 	} catch (error) {
 		console.error('Login error:', error);
 		await logAuditEvent(env, {
@@ -136,18 +136,18 @@ export async function handleLogin(req, env) {
 			success: false,
 			errorMessage: error.message,
 		});
-		return errorResponse('Login failed', 500);
+		return errorResponse('Login failed', 500, req);
 	}
 }
 
 export async function handleProfile(req, env) {
 	if (req.method !== 'GET') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser) {
-		return errorResponse('Unauthorized', 401);
+		return errorResponse('Unauthorized', 401, req);
 	}
 
 	const ipAddress = getClientIP(req);
@@ -163,7 +163,7 @@ export async function handleProfile(req, env) {
 		success: true,
 	});
 
-	return jsonResponse(authUser);
+	return jsonResponse(authUser, 200, req);
 }
 
 // Remove the duplicate requireAuth function since we're importing it from auth.js

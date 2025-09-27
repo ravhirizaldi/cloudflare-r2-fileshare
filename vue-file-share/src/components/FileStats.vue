@@ -129,9 +129,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useAuth } from '../stores/auth'
+import api from '../services/api'
 
-const auth = useAuth()
 const loading = ref(false)
 const error = ref(null)
 const stats = ref(null)
@@ -140,11 +139,8 @@ const refreshStats = async () => {
   loading.value = true
   error.value = null
   try {
-    const res = await fetch('/api/user/stats', {
-      headers: { Authorization: `Bearer ${auth.token}` },
-    })
-    if (!res.ok) throw new Error('Failed to fetch statistics')
-    const data = await res.json()
+    const res = await api.get('/user/stats')
+    const data = res.data
     stats.value = data.stats
   } catch (err) {
     error.value = err.message

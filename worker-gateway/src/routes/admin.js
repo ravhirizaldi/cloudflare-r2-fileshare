@@ -8,12 +8,12 @@ import { logAuditEvent, getClientIP, archiveExpiredFile } from '../helpers/audit
  */
 export async function handleDeleteFile(req, env, token) {
 	if (req.method !== 'DELETE') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser) {
-		return errorResponse('Unauthorized', 401);
+		return errorResponse('Unauthorized', 401, req);
 	}
 
 	const ipAddress = getClientIP(req);
@@ -40,7 +40,7 @@ export async function handleDeleteFile(req, env, token) {
 				success: false,
 				errorMessage: 'File not found',
 			});
-			return errorResponse('File not found', 404);
+			return errorResponse('File not found', 404, req);
 		}
 
 		const fileData = results[0];
@@ -57,14 +57,14 @@ export async function handleDeleteFile(req, env, token) {
 				success: false,
 				errorMessage: 'Access denied - not owner or admin',
 			});
-			return errorResponse('Forbidden - you can only delete your own files', 403);
+			return errorResponse('Forbidden - you can only delete your own files', 403, req);
 		}
 
 		const url = new URL(req.url);
 		const permanent = url.searchParams.get('permanent') === 'true';
 
 		if (permanent && authUser.role !== 'admin') {
-			return errorResponse('Forbidden - only admins can permanently delete files', 403);
+			return errorResponse('Forbidden - only admins can permanently delete files', 403, req);
 		}
 
 		if (permanent) {
@@ -91,10 +91,14 @@ export async function handleDeleteFile(req, env, token) {
 				success: true,
 			});
 
-			return jsonResponse({
-				message: 'File permanently deleted',
-				filename: fileData.filename,
-			});
+			return jsonResponse(
+				{
+					message: 'File permanently deleted',
+					filename: fileData.filename,
+				},
+				200,
+				req
+			);
 		} else {
 			// Soft deletion - mark as deleted
 			await env.DB.prepare(
@@ -118,10 +122,14 @@ export async function handleDeleteFile(req, env, token) {
 				success: true,
 			});
 
-			return jsonResponse({
-				message: 'File deleted (can be restored by admin)',
-				filename: fileData.filename,
-			});
+			return jsonResponse(
+				{
+					message: 'File deleted (can be restored by admin)',
+					filename: fileData.filename,
+				},
+				200,
+				req
+			);
 		}
 	} catch (error) {
 		console.error('Delete file error:', error);
@@ -135,7 +143,7 @@ export async function handleDeleteFile(req, env, token) {
 			success: false,
 			errorMessage: error.message,
 		});
-		return errorResponse('Internal server error', 500);
+		return errorResponse('Internal server error', 500, req);
 	}
 }
 
@@ -144,12 +152,12 @@ export async function handleDeleteFile(req, env, token) {
  */
 export async function handleFileStats(req, env, token) {
 	if (req.method !== 'GET') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser) {
-		return errorResponse('Unauthorized', 401);
+		return errorResponse('Unauthorized', 401, req);
 	}
 
 	const ipAddress = getClientIP(req);
@@ -166,14 +174,14 @@ export async function handleFileStats(req, env, token) {
 			.all();
 
 		if (fileResults.length === 0) {
-			return errorResponse('File not found', 404);
+			return errorResponse('File not found', 404, req);
 		}
 
 		const fileData = fileResults[0];
 
 		// Check if user is owner or admin
 		if (authUser.sub !== fileData.owner && authUser.role !== 'admin') {
-			return errorResponse('Forbidden - you can only view stats for your own files', 403);
+			return errorResponse('Forbidden - you can only view stats for your own files', 403, req);
 		}
 
 		// Get download history
@@ -274,7 +282,7 @@ export async function handleFileStats(req, env, token) {
 		});
 	} catch (error) {
 		console.error('Get file stats error:', error);
-		return errorResponse('Internal server error', 500);
+		return errorResponse('Internal server error', 500, req);
 	}
 }
 
@@ -283,12 +291,12 @@ export async function handleFileStats(req, env, token) {
  */
 export async function handleUserStats(req, env) {
 	if (req.method !== 'GET') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser) {
-		return errorResponse('Unauthorized', 401);
+		return errorResponse('Unauthorized', 401, req);
 	}
 
 	const ipAddress = getClientIP(req);
@@ -369,7 +377,7 @@ export async function handleUserStats(req, env) {
 		});
 	} catch (error) {
 		console.error('Get user stats error:', error);
-		return errorResponse('Internal server error', 500);
+		return errorResponse('Internal server error', 500, req);
 	}
 }
 
@@ -378,12 +386,12 @@ export async function handleUserStats(req, env) {
  */
 export async function handleAuditTrail(req, env) {
 	if (req.method !== 'GET') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser || authUser.role !== 'admin') {
-		return errorResponse('Forbidden - admin access required', 403);
+		return errorResponse('Forbidden - admin access required', 403, req);
 	}
 
 	const url = new URL(req.url);
@@ -475,7 +483,7 @@ export async function handleAuditTrail(req, env) {
 		});
 	} catch (error) {
 		console.error('Get audit trail error:', error);
-		return errorResponse('Internal server error', 500);
+		return errorResponse('Internal server error', 500, req);
 	}
 }
 
@@ -484,12 +492,12 @@ export async function handleAuditTrail(req, env) {
  */
 export async function handleRestoreFile(req, env, token) {
 	if (req.method !== 'POST') {
-		return errorResponse('Method not allowed', 405);
+		return errorResponse('Method not allowed', 405, req);
 	}
 
 	const authUser = await requireAuth(req, env);
 	if (!authUser || authUser.role !== 'admin') {
-		return errorResponse('Forbidden - admin access required', 403);
+		return errorResponse('Forbidden - admin access required', 403, req);
 	}
 
 	const ipAddress = getClientIP(req);
@@ -505,7 +513,7 @@ export async function handleRestoreFile(req, env, token) {
 			.all();
 
 		if (results.length === 0) {
-			return errorResponse('Deleted file not found', 404);
+			return errorResponse('Deleted file not found', 404, req);
 		}
 
 		const fileData = results[0];
@@ -531,12 +539,16 @@ export async function handleRestoreFile(req, env, token) {
 			success: true,
 		});
 
-		return jsonResponse({
-			message: 'File restored successfully',
-			filename: fileData.filename,
-		});
+		return jsonResponse(
+			{
+				message: 'File restored successfully',
+				filename: fileData.filename,
+			},
+			200,
+			req
+		);
 	} catch (error) {
 		console.error('Restore file error:', error);
-		return errorResponse('Internal server error', 500);
+		return errorResponse('Internal server error', 500, req);
 	}
 }

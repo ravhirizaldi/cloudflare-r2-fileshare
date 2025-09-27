@@ -132,9 +132,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useAuth } from '../stores/auth'
+import api from '../services/api'
 
-const auth = useAuth()
 const loading = ref(false)
 const error = ref(null)
 const recentActivity = ref([])
@@ -146,17 +145,8 @@ const refreshActivity = async () => {
   error.value = null
 
   try {
-    const response = await fetch('/api/user/stats', {
-      headers: {
-        Authorization: `Bearer ${auth.token}`,
-      },
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch data')
-    }
-
-    const data = await response.json()
+    const response = await api.get('/user/stats')
+    const data = response.data
     recentActivity.value = data.recentActivity || []
     expiredFiles.value = data.expiredFiles || []
 

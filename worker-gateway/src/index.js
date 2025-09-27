@@ -12,7 +12,7 @@ import {
 } from './routes/files.js';
 import { handleDeleteFile, handleFileStats, handleUserStats, handleAuditTrail, handleRestoreFile } from './routes/admin.js';
 import { cleanupExpiredFiles } from './helpers/cleanup.js';
-import { jsonResponse } from './helpers/auth.js';
+import { jsonResponse, handleCorsPrelight } from './helpers/auth.js';
 
 // ==== Router ====
 
@@ -21,6 +21,11 @@ export function createRouter() {
 		async handleRequest(req, env) {
 			const url = new URL(req.url);
 			const path = url.pathname;
+
+			// Handle CORS preflight requests
+			if (req.method === 'OPTIONS') {
+				return handleCorsPrelight(req);
+			}
 
 			try {
 				// Auth routes
@@ -112,7 +117,7 @@ export function createRouter() {
 						const previewToken = pathParts[3];
 						return await handlePreview(req, env, token, previewToken);
 					}
-					return jsonResponse({ error: 'Invalid preview URL format' }, 400);
+					return jsonResponse({ error: 'Invalid preview URL format' }, 400, req);
 				}
 
 				// Debug route for cron testing
@@ -120,7 +125,7 @@ export function createRouter() {
 					if (req.method === 'POST') {
 						// Manually trigger cleanup for testing
 						const result = await cleanupExpiredFiles(env);
-						return jsonResponse({ message: 'Cleanup triggered manually', result });
+						return jsonResponse({ message: 'Cleanup triggered manually', result }, 200, req);
 					} else {
 						// Get cleanup info
 						const { results } = await env.DB.prepare(
@@ -132,20 +137,24 @@ export function createRouter() {
 							.bind(Date.now())
 							.all();
 
-						return jsonResponse({
-							message: 'Cleanup debug info',
-							currentTime: Date.now(),
-							expiredFiles: results,
-							cronSchedule: '0 * * * * (every hour at minute 0)',
-						});
+						return jsonResponse(
+							{
+								message: 'Cleanup debug info',
+								currentTime: Date.now(),
+								expiredFiles: results,
+								cronSchedule: '0 * * * * (every hour at minute 0)',
+							},
+							200,
+							req
+						);
 					}
 				}
 
 				// Default response
-				return jsonResponse({ message: 'File Gateway API is running' });
+				return jsonResponse({ message: 'File Gateway API is running' }, 200, req);
 			} catch (error) {
 				console.error('Request error:', error);
-				return jsonResponse({ error: 'Internal server error' }, 500);
+				return jsonResponse({ error: 'Internal server error' }, 500, req);
 			}
 		},
 	};

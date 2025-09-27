@@ -1,13 +1,27 @@
 import axios from 'axios'
 
 // Use environment variables for configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8787'
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'https://ypur-endpoint-from-console.workers.dev'
 const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT) || 300000
 
+// Debug environment detection
+console.log('🔧 API Configuration:', {
+  MODE: import.meta.env.MODE,
+  DEV: import.meta.env.DEV,
+  PROD: import.meta.env.PROD,
+  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+  API_BASE_URL,
+})
+
 // Create axios instance with environment-based configuration
-const baseURL = import.meta.env.DEV
-  ? '/api' // Use proxy in development
-  : API_BASE_URL // Use environment variable in production
+// Always use the worker URL directly in production, use proxy only in local development
+const baseURL =
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? '/api' // Use proxy in local development only
+    : API_BASE_URL // Use worker URL directly in production
+
+console.log('🌐 Using API baseURL:', baseURL, '| hostname:', window.location.hostname)
 
 const api = axios.create({
   baseURL,
