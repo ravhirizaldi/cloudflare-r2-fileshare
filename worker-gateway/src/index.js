@@ -24,7 +24,7 @@ export function createRouter() {
 
 			// Handle CORS preflight requests
 			if (req.method === 'OPTIONS') {
-				return handleCorsPrelight(req);
+				return handleCorsPrelight(req, env);
 			}
 
 			try {

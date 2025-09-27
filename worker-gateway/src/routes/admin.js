@@ -252,34 +252,38 @@ export async function handleFileStats(req, env, token) {
 			success: true,
 		});
 
-		return jsonResponse({
-			file: {
-				id: fileData.id,
-				filename: fileData.filename,
-				owner: fileData.owner,
-				created_at: fileData.created_at,
-				file_size: fileData.file_size,
-				mime: fileData.mime,
+		return jsonResponse(
+			{
+				file: {
+					id: fileData.id,
+					filename: fileData.filename,
+					owner: fileData.owner,
+					created_at: fileData.created_at,
+					file_size: fileData.file_size,
+					mime: fileData.mime,
+				},
+				stats: {
+					totalDownloads,
+					uniqueIPs,
+					successfulDownloads,
+					totalBytes,
+					downloadsByDate,
+					browserStats,
+					osStats,
+				},
+				recentDownloads: downloadHistory.slice(0, 20).map((d) => ({
+					timestamp: d.downloaded_at,
+					ip: d.ip_address,
+					userAgent: d.user_agent,
+					browserInfo: d.browser_info ? JSON.parse(d.browser_info) : null,
+					userId: d.user_id,
+					success: d.success,
+				})),
+				dailyStats: statsResults,
 			},
-			stats: {
-				totalDownloads,
-				uniqueIPs,
-				successfulDownloads,
-				totalBytes,
-				downloadsByDate,
-				browserStats,
-				osStats,
-			},
-			recentDownloads: downloadHistory.slice(0, 20).map((d) => ({
-				timestamp: d.downloaded_at,
-				ip: d.ip_address,
-				userAgent: d.user_agent,
-				browserInfo: d.browser_info ? JSON.parse(d.browser_info) : null,
-				userId: d.user_id,
-				success: d.success,
-			})),
-			dailyStats: statsResults,
-		});
+			200,
+			req
+		);
 	} catch (error) {
 		console.error('Get file stats error:', error);
 		return errorResponse('Internal server error', 500, req);

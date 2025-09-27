@@ -7,7 +7,8 @@
 		"enabled": true
 	},
 	"vars": {
-		"CORS_ORIGIN": "http://localhost:5173",
+		"ALLOWED_ORIGINS": "https://yourdomain.com,https://your-other-domain.com",
+		"JWT_SECRET": "your-super-secret-jwt-key-generate-a-long-random-string-here",
 		"MAX_FILE_SIZE": "104857600",
 		"DEFAULT_EXPIRY_HOURS": "24",
 		"MAX_DOWNLOADS_DEFAULT": "10"

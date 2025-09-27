@@ -11,18 +11,26 @@ export async function requireAuth(req, env) {
 
 // ==== CORS Helpers ====
 
-const ALLOWED_ORIGINS = [
-	'https://r2.cajnet.id', // production domain
-	'http://localhost:5173', // for local development
-	'http://localhost:3000',
-	'http://127.0.0.1:5173',
-];
+function getAllowedOrigins(env) {
+	// Get allowed origins from environment variables, fallback to localhost for development
+	const envOrigins = env.ALLOWED_ORIGINS || env.CORS_ORIGINS || '';
+	const origins = envOrigins
+		? envOrigins.split(',').map(origin => origin.trim())
+		: [
+			'http://localhost:5173', // for local development
+			'http://localhost:3000',
+			'http://127.0.0.1:5173',
+		];
+	
+	return origins;
+}
 
-function getCorsHeaders(origin) {
-	const isAllowed = ALLOWED_ORIGINS.includes(origin);
+function getCorsHeaders(origin, env) {
+	const allowedOrigins = getAllowedOrigins(env);
+	const isAllowed = allowedOrigins.includes(origin);
 
 	return {
-		'Access-Control-Allow-Origin': isAllowed ? origin : ALLOWED_ORIGINS[0],
+		'Access-Control-Allow-Origin': isAllowed ? origin : (allowedOrigins[0] || '*'),
 		'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 		'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
 		'Access-Control-Allow-Credentials': 'true',
@@ -30,9 +38,9 @@ function getCorsHeaders(origin) {
 	};
 }
 
-export function handleCorsPrelight(req) {
+export function handleCorsPrelight(req, env) {
 	const origin = req.headers.get('Origin');
-	const corsHeaders = getCorsHeaders(origin);
+	const corsHeaders = getCorsHeaders(origin, env);
 
 	return new Response(null, {
 		status: 204,
@@ -40,9 +48,9 @@ export function handleCorsPrelight(req) {
 	});
 }
 
-export function addCorsHeaders(response, req) {
+export function addCorsHeaders(response, req, env) {
 	const origin = req.headers.get('Origin');
-	const corsHeaders = getCorsHeaders(origin);
+	const corsHeaders = getCorsHeaders(origin, env);
 
 	Object.entries(corsHeaders).forEach(([key, value]) => {
 		response.headers.set(key, value);
@@ -53,28 +61,28 @@ export function addCorsHeaders(response, req) {
 
 // ==== Response Helpers ====
 
-export function jsonResponse(data, status = 200, req = null) {
+export function jsonResponse(data, status = 200, req = null, env = null) {
 	const response = new Response(JSON.stringify(data), {
 		status,
 		headers: { 'Content-Type': 'application/json' },
 	});
 
-	if (req) {
-		return addCorsHeaders(response, req);
+	if (req && env) {
+		return addCorsHeaders(response, req, env);
 	}
 
 	return response;
 }
 
-export function errorResponse(message, status = 400, req = null) {
-	return jsonResponse({ error: message }, status, req);
+export function errorResponse(message, status = 400, req = null, env = null) {
+	return jsonResponse({ error: message }, status, req, env);
 }
 
 // Legacy functions for backward compatibility (auto-add CORS)
-export function corsJsonResponse(data, status = 200, req) {
-	return jsonResponse(data, status, req);
+export function corsJsonResponse(data, status = 200, req, env) {
+	return jsonResponse(data, status, req, env);
 }
 
-export function corsErrorResponse(message, status = 400, req) {
-	return errorResponse(message, status, req);
+export function corsErrorResponse(message, status = 400, req, env) {
+	return errorResponse(message, status, req, env);
 }

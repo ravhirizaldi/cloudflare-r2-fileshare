@@ -584,7 +584,7 @@ export async function handleDownload(req, env, token) {
 		});
 
 		// Add CORS headers to the range response
-		return addCorsHeaders(rangeResponse, req);
+		return addCorsHeaders(rangeResponse, req, env);
 	}
 
 	// Record full download
@@ -638,7 +638,7 @@ export async function handleDownload(req, env, token) {
 	});
 
 	// Add CORS headers to the response
-	return addCorsHeaders(response, req);
+	return addCorsHeaders(response, req, env);
 }
 
 export async function handleMyFiles(req, env) {
